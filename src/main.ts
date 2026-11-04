@@ -28,6 +28,7 @@ const S = {
   calAhead: {} as Record<number, Slot<Calendar>>, // days after today, loaded when tapped
   range: slot<CalendarRangeResponse>(), // the calendar tab, loaded when opened
   weekOpen: false, // this_week.txt showing everything
+  billsPaid: false, // bills tab showing paid bills instead of unpaid
   focusProject: "", // a project to scroll to when the projects tab opens
   openProject: "", // the project whose page is open (#project/<id>)
   notes: {} as Record<string, Slot<ProjectContentResponse>>, // project notes, loaded when a page opens
@@ -251,18 +252,31 @@ function tasksView(): string {
 }
 
 // Bills are view only. There is deliberately no pay, mark-paid, or edit control here.
+// Bills are view only. There is deliberately no pay, mark-paid, or edit control here;
+// the switch only changes which bills are shown.
+const BILL_COLOR: Record<string, string> = { Rent: "peach", Utilities: "sky", "Yearly renewal": "lilac", Other: "butter" };
 function billsView(): string {
   const t = todayStr();
-  return win("bills.txt", "peach", sect(S.bills, (rows) => {
-    const byDate = (a: Bill, b: Bill) => (a.due || "9999") < (b.due || "9999") ? -1 : (a.due || "9999") > (b.due || "9999") ? 1 : 0;
-    const open = rows.filter((b) => !b.paid).sort(byDate), paid = rows.filter((b) => b.paid).sort(byDate);
-    const row = (b: Bill) => {
-      const when = b.due ? (b.due < t ? "past its due date" : "due " + rel(b.due, t)) : "no date";
-      return `<li><div class="line"><span><b>${esc(b.name)}</b></span><span><b>${esc(money(b.amount))}</b></span></div><span class="meta">${esc([b.type, b.repeats, b.due ? lbl(b.due) : "", when].filter(Boolean).join(" · "))}</span></li>`;
-    };
-    return '<div class="meta">view only</div>' + (open.length ? `<ul class="list">${open.map(row).join("")}</ul>` : '<div class="soft">No unpaid bills listed.</div>') +
-      (paid.length ? `<hr><details><summary>marked paid (${paid.length})</summary><ul class="list mt">${paid.map(row).join("")}</ul></details>` : "");
-  }), true);
+  if (!S.bills.data) return win("bills.txt", "peach", sect(S.bills, () => ""), true);
+  const rows = S.bills.data;
+  const key = (b: Bill) => b.due || "9999";
+  const open = rows.filter((b) => !b.paid).sort((a, b) => key(a).localeCompare(key(b)));
+  const paid = rows.filter((b) => b.paid).sort((a, b) => key(b).localeCompare(key(a)));
+  const showPaid = S.billsPaid;
+  const sw = '<div class="status"><div class="days" role="group" aria-label="Which bills to show">' +
+    `<button class="day" type="button" data-act="billsview" data-v="unpaid" aria-pressed="${!showPaid}">unpaid (${open.length})</button>` +
+    `<button class="day" type="button" data-act="billsview" data-v="paid" aria-pressed="${showPaid}">paid (${paid.length})</button>` +
+    '</div><span class="meta">view only</span></div>';
+  const note = S.bills.status === "error" ? `<div class="note wide">${esc(errText(S.bills.err, "Notion"))} Showing the last copy.</div>` : "";
+  const list = showPaid ? paid : open;
+  if (!list.length) return sw + note + win("bills.txt", "mint", `<div class="soft">${showPaid ? "No bills marked paid." : "No unpaid bills listed."}</div>`, true);
+  return sw + note + list.map((b) => {
+    const when = b.due ? (showPaid ? lbl(b.due) : b.due < t ? lbl(b.due) + " · past its due date" : lbl(b.due) + " · due " + rel(b.due, t)) : "no date";
+    const tags = [b.type, b.repeats].filter(Boolean).map((x) => `<span class="tag">${esc(x.toLowerCase())}</span>`).join("") + (showPaid ? '<span class="tag mint">paid</span>' : "");
+    const body = `<div class="line"><span class="mid">${esc(b.name)}</span><span class="mid">${esc(money(b.amount))}</span></div>` +
+      `<div class="meta">${esc(when)}</div>` + (tags ? `<div class="row">${tags}</div>` : "");
+    return win(fileName(b.name), showPaid ? "mint" : BILL_COLOR[b.type] || "butter", body);
+  }).join("");
 }
 
 const STATUS_ORDER = ["Urgent", "Active", "Ongoing", "Later"];
@@ -599,6 +613,7 @@ app.addEventListener("click", (e) => {
   if (a === "refresh") void refreshAll();
   else if (a === "day") pickDay(Number(b.dataset.day));
   else if (a === "week") { S.weekOpen = !S.weekOpen; render(); }
+  else if (a === "billsview") { S.billsPaid = b.dataset.v === "paid"; render(); }
   else if (a === "goproject") { e.preventDefault(); goProject(id); }
   else if (a === "backprojects") { e.preventDefault(); goProject(id); }
   else if (a === "toggle") void toggleDone(id);
