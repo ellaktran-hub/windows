@@ -28,7 +28,7 @@ const S = {
   calAhead: {} as Record<number, Slot<Calendar>>, // days after today, loaded when tapped
   range: slot<CalendarRangeResponse>(), // the calendar tab, loaded when opened
   weekOpen: false, // this_week.txt showing everything
-  billsPaid: false, // bills tab showing paid bills instead of unpaid
+  billsGroup: "unpaid" as "unpaid" | "paid", // which bills the bills tab shows
   focusProject: "", // a project to scroll to when the projects tab opens
   openProject: "", // the project whose page is open (#project/<id>)
   notes: {} as Record<string, Slot<ProjectContentResponse>>, // project notes, loaded when a page opens
@@ -262,7 +262,7 @@ function billsView(): string {
   const key = (b: Bill) => b.due || "9999";
   const open = rows.filter((b) => !b.paid).sort((a, b) => key(a).localeCompare(key(b)));
   const paid = rows.filter((b) => b.paid).sort((a, b) => key(b).localeCompare(key(a)));
-  const showPaid = S.billsPaid;
+  const showPaid = S.billsGroup === "paid";
   const sw = '<div class="status"><div class="days" role="group" aria-label="Which bills to show">' +
     `<button class="day" type="button" data-act="billsview" data-v="unpaid" aria-pressed="${!showPaid}">unpaid (${open.length})</button>` +
     `<button class="day" type="button" data-act="billsview" data-v="paid" aria-pressed="${showPaid}">paid (${paid.length})</button>` +
@@ -613,7 +613,7 @@ app.addEventListener("click", (e) => {
   if (a === "refresh") void refreshAll();
   else if (a === "day") pickDay(Number(b.dataset.day));
   else if (a === "week") { S.weekOpen = !S.weekOpen; render(); }
-  else if (a === "billsview") { S.billsPaid = b.dataset.v === "paid"; render(); }
+  else if (a === "billsview") { S.billsGroup = b.dataset.v === "paid" ? "paid" : "unpaid"; render(); }
   else if (a === "goproject") { e.preventDefault(); goProject(id); }
   else if (a === "backprojects") { e.preventDefault(); goProject(id); }
   else if (a === "toggle") void toggleDone(id);
