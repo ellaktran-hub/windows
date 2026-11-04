@@ -3,7 +3,7 @@
 // file is marked source: "sample" and the page shows a clear sample note.
 
 import { addDays, lbl, todayStr } from "../shared/dates.js";
-import type { Bill, Calendar, Project, SleepEntry, Task } from "../shared/types.js";
+import type { Bill, Calendar, NoteBlock, Project, SleepEntry, Task } from "../shared/types.js";
 
 export function sampleData() {
   const t = todayStr();
@@ -53,4 +53,19 @@ export function sampleCalendar(day: string): Calendar {
   if (wd === 0 || wd === 6) return { connected: true, work: null, noWork: ["Sample: Day off"], tags: [], appts: [{ sort: "0", time: "all day", title: "Sample: Farmers market" }], failed: 0 };
   const appts = wd === 3 ? [{ sort: "1", time: "3:30 pm", title: "Sample: Allergist" }] : wd === 5 ? [{ sort: "1", time: "6:00 pm", title: "Sample: Dinner with Harry" }] : [];
   return { connected: true, work: "9:00 am – 5:00 pm", noWork: [], tags: wd === 5 ? ["Sample: payday"] : [], appts, failed: 0 };
+}
+
+/** Sample notes for a sample project page. */
+export function sampleNotes(): NoteBlock[] {
+  return [
+    { kind: "h2", text: [{ t: "Sample: Notes" }] },
+    { kind: "p", text: [{ t: "These are " }, { t: "sample", b: true }, { t: " notes, read only here." }] },
+    { kind: "li", text: [{ t: "Ask about the deposit" }] },
+    { kind: "li", text: [{ t: "Photos of each room before moving" }] },
+    { kind: "divider", text: [] },
+    { kind: "h3", text: [{ t: "Contacts" }] },
+    { kind: "p", text: [{ t: "Sample landlord: " }, { t: "email", href: "mailto:landlord@example.com" }] },
+    { kind: "todo", text: [{ t: "Book the van" }], checked: true },
+    { kind: "toggle", text: [{ t: "Old notes" }], more: true },
+  ];
 }

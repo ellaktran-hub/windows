@@ -5,7 +5,7 @@
 // Reads, plus exactly four small writes (task status, Top 3, new task,
 // new sleep entry). There is no delete, archive, or trash call here.
 
-import type { Bill, Project, SleepEntry, Task } from "../shared/types.js";
+import type { Bill, NoteBlock, Project, RichBit, SleepEntry, Task } from "../shared/types.js";
 
 export const NOTION_VERSION = "2026-03-11";
 export const NOTION_BASE = "https://api.notion.com/v1";
@@ -117,6 +117,26 @@ export class NotionReader {
     return rows.map(normSleep).filter((x) => x.night);
   }
 
+  /** A project's page content (notes, contacts), read only. Checks it really is a project first. */
+  async projectContent(pageId: string): Promise<{ blocks: NoteBlock[]; truncated: boolean }> {
+    const id = idOf(pageId);
+    if (!/^[0-9a-f]{32}$/.test(id)) throw new NotionFail("bad_request", 400, "bad id");
+    const p = await this.send("GET", `/pages/${id}`, undefined, false);
+    if (idOf(p?.parent?.data_source_id || "") !== idOf(DS.projects)) throw new NotionFail("not_found", 404);
+    const blocks: NoteBlock[] = [];
+    let cursor: string | undefined, truncated = false;
+    for (let i = 0; i < 3; i++) {
+      const q = "?page_size=100" + (cursor ? "&start_cursor=" + encodeURIComponent(cursor) : "");
+      const r = await this.send("GET", `/blocks/${id}/children${q}`, undefined, false);
+      if (!r || !Array.isArray(r.results)) throw new NotionFail("bad_shape", 200);
+      for (const b of r.results) { const n = normBlock(b); if (n) blocks.push(n); }
+      if (!r.has_more || !r.next_cursor) { cursor = undefined; break; }
+      cursor = r.next_cursor;
+    }
+    if (cursor) truncated = true;
+    return { blocks, truncated };
+  }
+
   /* ---------- writes: only these four, nothing else ---------- */
 
   /** Confirms a page really is a row in the Tasks database before changing it. */
@@ -218,4 +238,49 @@ export function normSleep(p: NotionPage): SleepEntry {
     hours: num(prop(p, "Hours slept")),
     logged: created(p, prop(p, "Logged")),
   };
+}
+
+/* ---------- project notes ---------- */
+/** Keeps only web, mail, and phone links; Notion's own links become full addresses. */
+export function safeHref(h: unknown): string | undefined {
+  if (typeof h !== "string" || !h) return undefined;
+  if (h.startsWith("/")) return "https://www.notion.so" + h;
+  try {
+    const u = new URL(h);
+    return ["https:", "http:", "mailto:", "tel:"].includes(u.protocol) ? u.toString() : undefined;
+  } catch { return undefined; }
+}
+function rich(arr: unknown): RichBit[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((r: any) => {
+    const a = r?.annotations || {};
+    const bit: RichBit = { t: String(r?.plain_text ?? "") };
+    if (a.bold) bit.b = true; if (a.italic) bit.i = true; if (a.code) bit.c = true; if (a.strikethrough) bit.s = true;
+    const href = safeHref(r?.href); if (href) bit.href = href;
+    return bit;
+  }).filter((b) => b.t);
+}
+const KIND: Record<string, NoteBlock["kind"]> = {
+  paragraph: "p", heading_1: "h1", heading_2: "h2", heading_3: "h3", bulleted_list_item: "li", numbered_list_item: "ol",
+  to_do: "todo", quote: "quote", callout: "callout", toggle: "toggle", code: "code",
+};
+export function normBlock(b: any): NoteBlock | null {
+  if (!b || b.object !== "block" || b.in_trash === true || b.archived === true) return null;
+  const type = String(b.type || ""), v = b[type] || {};
+  const more = b.has_children === true && type !== "child_page" && type !== "child_database";
+  if (type === "divider") return { kind: "divider", text: [] };
+  if (KIND[type]) {
+    const n: NoteBlock = { kind: KIND[type], text: rich(v.rich_text) };
+    if (type === "to_do") n.checked = v.checked === true;
+    if (more) n.more = true;
+    return n;
+  }
+  if (type === "bookmark" || type === "link_preview" || type === "embed") {
+    const href = safeHref(v.url);
+    return href ? { kind: "link", text: [{ t: (rich(v.caption).map((x) => x.t).join("") || href), href }] } : null;
+  }
+  if (type === "child_page" || type === "child_database") return { kind: "other", text: [{ t: (v.title || "A page") + " (open in Notion)" }] };
+  if (type === "image" || type === "file" || type === "pdf" || type === "video" || type === "audio") return { kind: "other", text: [{ t: "An attachment (open in Notion to see it)" }] };
+  if (type === "table" || type === "column_list" || type === "synced_block") return { kind: "other", text: [{ t: "More here in Notion" }], more: true };
+  return null;
 }

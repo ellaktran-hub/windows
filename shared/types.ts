@@ -72,3 +72,14 @@ export interface CalendarResponse {
 export interface ApiError {
   error: { code: string; message: string };
 }
+
+/** A piece of text inside a note, with simple styling. */
+export interface RichBit { t: string; b?: boolean; i?: boolean; c?: boolean; s?: boolean; href?: string }
+/** One block of a project's notes, simplified for showing (read only). */
+export interface NoteBlock {
+  kind: "p" | "h1" | "h2" | "h3" | "li" | "ol" | "todo" | "quote" | "callout" | "divider" | "toggle" | "code" | "link" | "other";
+  text: RichBit[];
+  checked?: boolean;
+  more?: boolean; // has more inside that only shows in Notion
+}
+export interface ProjectContentResponse { source: Source; blocks: NoteBlock[]; truncated: boolean }

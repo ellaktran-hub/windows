@@ -4,6 +4,7 @@
 
 import "./styles.css";
 import { addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
+import type { NoteBlock, ProjectContentResponse, RichBit } from "../shared/types.js";
 import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
 import * as R from "./rules.js";
@@ -28,6 +29,8 @@ const S = {
   range: slot<CalendarRangeResponse>(), // the calendar tab, loaded when opened
   weekOpen: false, // this_week.txt showing everything
   focusProject: "", // a project to scroll to when the projects tab opens
+  openProject: "", // the project whose page is open (#project/<id>)
+  notes: {} as Record<string, Slot<ProjectContentResponse>>, // project notes, loaded when a page opens
   updated: null as number | null,
   refreshing: false,
   confirmDup: false,
@@ -103,6 +106,7 @@ async function refreshAll() {
     ...(S.calDay ? [load(calSlot(S.calDay), calFetch(S.calDay))] : []),
   ]);
   if (S.tab === "calendar" || S.range.data) await loadRange();
+  if (S.tab === "project" && S.openProject) loadNotes(S.openProject);
   S.updated = Date.now();
   S.refreshing = false;
   render();
@@ -156,7 +160,7 @@ function hello(): string {
   return `<section class="win wide hello"><div class="bar pink"><span>hi, lovely</span>${refresh}</div><div class="body">` +
     `<div class="stack"><div class="date">${esc(weekday(t) + " · " + lbl(t))}</div><h1>${g}, <em>Ella.</em></h1>` +
     `<div class="soft">One small thing at a time.</div>${up ? `<div class="meta">${esc(up)}</div>` : ""}</div><svg class="heart" aria-hidden="true"><use href="#px-heart"/></svg></div></section>` +
-    `<nav class="tabs" aria-label="Pages">${TABS.map(([k, name]) => `<a class="tab" href="#${k}"${S.tab === k ? ' aria-current="page"' : ""}>${name}</a>`).join("")}</nav>` +
+    `<nav class="tabs" aria-label="Pages">${TABS.map(([k, name]) => `<a class="tab" href="#${k}"${S.tab === k || (k === "projects" && S.tab === "project") ? ' aria-current="page"' : ""}>${name}</a>`).join("")}</nav>` +
     (isSample() ? '<div class="note sample wide">Sample content. This is not your Notion data yet, and nothing you tap here is saved.</div>' : "");
 }
 
@@ -266,7 +270,7 @@ const STATUS_COLOR: Record<string, string> = { Urgent: "peach", Active: "butter"
 /** "Move out!" -> "move_out.txt", like the other window names. */
 /** A project's name that opens its window on the projects tab. */
 function projLink(p: Project, cls: string): string {
-  return `<a class="${cls} golink" href="#projects" data-act="goproject" data-id="${esc(p.id)}">${esc(p.name)}</a>`;
+  return `<a class="${cls} golink" href="#project/${esc(p.id)}">${esc(p.name)}</a>`;
 }
 function goProject(id: string) {
   S.focusProject = id;
@@ -302,10 +306,10 @@ function projectsView(): string {
       (p.focus ? '<span class="tag butter">focus</span>' : "") +
       (p.deadline ? `<span class="tag">${esc("deadline " + lbl(p.deadline))}</span>` : "") +
       (n ? `<span class="tag">${n} open</span>` : "");
-    const body = `<div class="mid">${esc(p.name)}</div>` +
+    const body = `<div class="mid"><a class="plain golink" href="#project/${esc(p.id)}">${esc(p.name)}</a></div>` +
       (tags ? `<div class="row">${tags}</div>` : "") +
       (p.next ? `<div class="stack tight"><span class="meta">next step</span>${stepLines(p.next)}</div>` : '<div class="meta">no next step written</div>') +
-      `<div><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
+      `<div class="row"><a class="btn quiet" href="#project/${esc(p.id)}">open</a><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
     return win(fileName(p.name), color, body).replace('<section class="win"', `<section class="win" id="p-${esc(p.id)}"`);
   }).join("");
 }
@@ -365,8 +369,73 @@ function calendarView(): string {
   return intro + note + failed + days;
 }
 
+function richHtml(bits: RichBit[]): string {
+  return bits.map((r) => {
+    let h = esc(r.t);
+    if (r.c) h = `<code>${h}</code>`;
+    if (r.b) h = `<b>${h}</b>`;
+    if (r.i) h = `<i>${h}</i>`;
+    if (r.s) h = `<s>${h}</s>`;
+    if (r.href) h = `<a class="golink" href="${esc(r.href)}" target="_blank" rel="noopener noreferrer">${h}</a>`;
+    return h;
+  }).join("");
+}
+function notesHtml(blocks: NoteBlock[]): string {
+  let n = 0;
+  return blocks.map((b) => {
+    n = b.kind === "ol" ? n + 1 : 0;
+    const t = richHtml(b.text), more = b.more ? '<span class="meta"> · more in Notion</span>' : "";
+    switch (b.kind) {
+      case "h1": return `<div class="nh1">${t}${more}</div>`;
+      case "h2": return `<div class="nh2">${t}${more}</div>`;
+      case "h3": return `<div class="nh3">${t}${more}</div>`;
+      case "li": return `<div class="nli">${t}${more}</div>`;
+      case "ol": return `<div class="nol"><span class="num">${n}.</span> ${t}${more}</div>`;
+      case "todo": return `<div class="ntodo${b.checked ? " on" : ""}"><span class="mini" aria-label="${b.checked ? "done" : "not done"}"></span><span>${t}</span>${more}</div>`;
+      case "quote": return `<div class="nquote">${t}${more}</div>`;
+      case "callout": return `<div class="note">${t}${more}</div>`;
+      case "toggle": return `<div class="nli">${t}<span class="meta"> · more in Notion</span></div>`;
+      case "code": return `<pre class="ncode">${t}</pre>`;
+      case "divider": return "<hr>";
+      case "p": return t ? `<div>${t}${more}</div>` : "";
+      case "link": return `<div>${t}</div>`;
+      default: return `<div class="meta">${t}</div>`;
+    }
+  }).join("") || '<div class="soft">No notes on this page yet.</div>';
+}
+
+function projectPageView(): string {
+  const id = S.openProject;
+  const back = `<div class="status"><a class="btn quiet" href="#projects" data-act="backprojects" data-id="${esc(id)}">all projects</a></div>`;
+  if (!S.projects.data) return back + win("project.txt", "butter", sect(S.projects, () => ""), true);
+  const p = S.projects.data.find((x) => x.id === id);
+  if (!p) return back + win("project.txt", "butter", '<div class="soft">That project was not found. It may have been renamed or moved in Notion.</div>', true);
+  const color = STATUS_COLOR[p.status] || "sky";
+  const t = todayStr();
+  const keep = new Set(Object.keys(S.prevStatus));
+  const tasks = (S.tasks.data || []).filter((x) => x.projectIds.includes(p.id) && (R.isOpen(x) || keep.has(x.id))).sort(R.byDue);
+  const tags = (p.status ? `<span class="tag ${color}">${esc(p.status.toLowerCase())}</span>` : "") +
+    (p.focus ? '<span class="tag butter">focus</span>' : "") +
+    (p.deadline ? `<span class="tag">${esc("deadline " + lbl(p.deadline) + " · " + rel(p.deadline, t))}</span>` : "");
+  const head = win(fileName(p.name), color,
+    `<div class="big">${esc(p.name)}</div>` + (tags ? `<div class="row">${tags}</div>` : "") +
+    (p.next ? `<div class="stack tight"><span class="meta">next step</span>${stepLines(p.next)}</div>` : '<div class="meta">no next step written</div>') +
+    `<div><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`, true);
+  const taskW = win("tasks.txt", "sky", sect(S.tasks, () => tasks.length ? tasks.map(todo).join("") : '<div class="soft">No open tasks for this project.</div>'), true);
+  const ns = S.notes[p.id] || slot<ProjectContentResponse>();
+  const notesW = win("notes.txt", "mint", sect(ns, (r) =>
+    '<div class="meta">read only · edit in Notion</div><div class="notes">' + notesHtml(r.blocks) + "</div>" +
+    (r.truncated ? '<div class="note">This page is long, so only the first part shows here. The rest is in Notion.</div>' : "")), true);
+  return back + head + taskW + notesW;
+}
+
+function loadNotes(id: string) {
+  const s = (S.notes[id] ||= slot<ProjectContentResponse>());
+  void load(s, async () => { const r = await getJson<ProjectContentResponse>("/api/projects/" + encodeURIComponent(id) + "/content"); return { source: r.source, data: r }; });
+}
+
 function view(): string {
-  const v = S.tab === "calendar" ? calendarView() : S.tab === "tasks" ? tasksView() : S.tab === "bills" ? billsView() : S.tab === "projects" ? projectsView() : S.tab === "sleep" ? sleepView() : todayView();
+  const v = S.tab === "project" ? projectPageView() : S.tab === "calendar" ? calendarView() : S.tab === "tasks" ? tasksView() : S.tab === "bills" ? billsView() : S.tab === "projects" ? projectsView() : S.tab === "sleep" ? sleepView() : todayView();
   return hello() + v + '<div class="foot">thank you for showing up today</div>';
 }
 
@@ -504,6 +573,7 @@ app.addEventListener("click", (e) => {
   else if (a === "day") pickDay(Number(b.dataset.day));
   else if (a === "week") { S.weekOpen = !S.weekOpen; render(); }
   else if (a === "goproject") { e.preventDefault(); goProject(id); }
+  else if (a === "backprojects") { e.preventDefault(); goProject(id); }
   else if (a === "toggle") void toggleDone(id);
   else if (a === "pin") void togglePin(id);
 });
@@ -535,7 +605,13 @@ function route() {
   clearTimeout(enterTimer);
   enterTimer = setTimeout(() => app.classList.remove("enter"), 700);
   const h = location.hash.replace("#", "");
-  S.tab = TABS.some(([k]) => k === h) ? h : "today";
+  const pm = h.match(/^project\/([0-9a-z]{1,64})$/i);
+  if (pm) {
+    S.tab = "project"; S.openProject = pm[1];
+    if (S.updated) loadNotes(pm[1]); // fresh notes each time a page opens
+  } else {
+    S.tab = TABS.some(([k]) => k === h) ? h : "today";
+  }
   if (S.tab === "calendar" && !S.range.data && S.range.status !== "error" && S.updated) void loadRange();
   render();
 }

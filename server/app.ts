@@ -9,9 +9,9 @@
 
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
-import type { CalendarRangeResponse, CalendarResponse, ListResponse } from "../shared/types.js";
+import type { CalendarRangeResponse, CalendarResponse, ListResponse, ProjectContentResponse } from "../shared/types.js";
 import { NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
-import { sampleCalendar, sampleData } from "./sample.js";
+import { sampleCalendar, sampleData, sampleNotes } from "./sample.js";
 import { authUrl, exchangeCode, GoogleFail, readRange, readToday, type GoogleConfig } from "./google.js";
 import { addDays, todayStr } from "../shared/dates.js";
 
@@ -156,6 +156,23 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     if (!notion) return c.json({ ok: true, source: "sample" });
     try { await notion.createSleep({ night, bed: String(b?.bed ?? "").trim(), wake: String(b?.wake ?? "").trim(), hours }); return c.json({ ok: true, source: "live" }); }
     catch (e) { return writeFail(c, "sleep", e); }
+  });
+
+  // A project's notes, read only.
+  app.get("/api/projects/:id/content", async (c) => {
+    const d = await demo(c);
+    if (d instanceof Response) return d;
+    const notion = opts.notion(c);
+    if (!notion) return c.json({ source: "sample", blocks: d === "empty" ? [] : sampleNotes(), truncated: false } satisfies ProjectContentResponse);
+    try {
+      const r = await notion.projectContent(c.req.param("id"));
+      return c.json({ source: "live", ...r } satisfies ProjectContentResponse);
+    } catch (e) {
+      const code = e instanceof NotionFail ? e.code : "server_error";
+      console.warn(`notion read project notes failed: ${code}`);
+      const http = code === "unauthorized" ? 401 : code === "not_shared" || code === "not_found" ? 404 : code === "rate_limited" ? 429 : 502;
+      return c.json({ error: { code, message: "Notion read failed" } }, http);
+    }
   });
 
   app.get("/api/health", (c) => c.json({ ok: true }));

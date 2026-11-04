@@ -111,6 +111,21 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .list li { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .line { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
 .line > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.notes { display: grid; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.notes .nh1 { font-family: var(--font-serif); font-size: 26px; line-height: 1.15; margin-top: 6px; }
+.notes .nh2 { font-family: var(--font-serif); font-size: 22px; line-height: 1.2; margin-top: 6px; }
+.notes .nh3 { font-weight: 700; margin-top: 4px; }
+.notes .nli, .notes .nol { padding-left: 16px; position: relative; }
+.notes .nli::before { content: ""; position: absolute; left: 2px; top: 0.6em; width: 6px; height: 6px; background: var(--ink); opacity: 0.6; }
+.notes .nol .num { position: absolute; left: -4px; font-weight: 700; }
+.notes .ntodo { display: flex; gap: 8px; align-items: baseline; }
+.notes .ntodo .mini { flex: none; width: 12px; height: 12px; border: 2px solid var(--ink); background: var(--paper); transform: translateY(1px); }
+.notes .ntodo.on .mini { background: var(--sea); }
+.notes .ntodo.on > span:nth-child(2) { text-decoration: line-through; opacity: 0.6; }
+.notes .nquote { border-left: 3px solid var(--ink); padding-left: 10px; font-family: var(--font-serif); font-style: italic; font-size: 17px; }
+.notes .ncode, .notes code { font-family: var(--font-mono); background: var(--mist); border-radius: 4px; }
+.notes .ncode { padding: 8px 10px; margin: 0; white-space: pre-wrap; }
+.notes code { padding: 0 4px; }
 .steps { list-style: none; margin: 0; padding: 0; display: grid; }
 .steps > li { display: grid; gap: 6px; padding: 12px 0; border-top: 2px dashed rgba(90, 51, 38, 0.3); min-width: 0; overflow-wrap: anywhere; }
 .steps > li:first-child { border-top: 0; padding-top: 0; }
