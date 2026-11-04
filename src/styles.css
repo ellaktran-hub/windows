@@ -86,6 +86,11 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .pin { flex: none; font: inherit; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 4px; padding: 0 8px; min-height: 28px; cursor: pointer; }
 .pin[aria-pressed="true"] { background: var(--butter); }
 
+.days { display: flex; flex-wrap: wrap; gap: 8px 6px; padding-bottom: 2px; }
+.day { flex: none; font: inherit; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 4px; padding: 2px 9px; min-height: 30px; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); }
+.day[aria-pressed="true"] { background: var(--butter); box-shadow: none; transform: translate(2px, 2px); }
+.day:hover { background: var(--peach); }
+
 .blocks { display: flex; gap: 6px; }
 .blocks i { width: 100%; max-width: 34px; height: 22px; border: 2px solid var(--ink); background: var(--paper); }
 .blocks i.on { background: var(--sea); }
@@ -120,4 +125,12 @@ details summary { cursor: pointer; font-weight: 700; min-height: 28px; }
 @media (prefers-reduced-motion: no-preference) {
   .heart { animation: bob 2.4s steps(2, end) infinite; }
   @keyframes bob { 50% { transform: translateY(-4px); } }
+  /* Windows pop in when a tab opens, a little one after another. */
+  .enter .win, .enter .bubble { animation: pop 0.28s steps(4, end) both; }
+  .enter > :nth-child(4) { animation-delay: 0.04s; } .enter > :nth-child(5) { animation-delay: 0.08s; }
+  .enter > :nth-child(6) { animation-delay: 0.12s; } .enter > :nth-child(7) { animation-delay: 0.16s; }
+  .enter > :nth-child(8) { animation-delay: 0.2s; } .enter > :nth-child(9) { animation-delay: 0.24s; }
+  .enter > :nth-child(n+10) { animation-delay: 0.28s; }
+  @keyframes pop { from { opacity: 0; transform: translate(0, 10px) scale(0.97); } to { opacity: 1; transform: none; } }
+  .day, .box, .pin, .btn, .tab { transition: transform 0.08s steps(2, end); }
 }

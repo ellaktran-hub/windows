@@ -64,6 +64,26 @@ export function comingUp(t: string, tasks: Task[] | null, projects: Project[] | 
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
+/** Open tasks due after today, up to 7 days ahead. */
+export function weekTasks(tasks: Task[] | null, t: string, keep: Set<string> = new Set()): Task[] {
+  const end = addDays(t, 7);
+  return (tasks || []).filter((x) => (isOpen(x) || keep.has(x.id)) && x.due != null && x.due > t && x.due <= end).sort(byDue);
+}
+
+/** Project deadlines from today up to 14 days ahead. */
+export function deadlinesSoon(projects: Project[] | null, t: string): Project[] {
+  const end = addDays(t, 14);
+  return (projects || []).filter((p) => p.deadline && p.deadline >= t && p.deadline <= end)
+    .sort((a, b) => (a.deadline! < b.deadline! ? -1 : a.deadline! > b.deadline! ? 1 : 0));
+}
+
+/** Unpaid bills due up to 14 days ahead, including any past their date. */
+export function billsSoon(bills: Bill[] | null, t: string): Bill[] {
+  const end = addDays(t, 14);
+  return (bills || []).filter((b) => !b.paid && b.due && b.due <= end)
+    .sort((a, b) => (a.due! < b.due! ? -1 : a.due! > b.due! ? 1 : 0));
+}
+
 export function nextSteps(projects: Project[] | null): Project[] {
   return (projects || []).filter((p) => (p.status === "Urgent" || p.status === "Active") && p.next);
 }

@@ -53,3 +53,21 @@ test("sleep: newest entry per night wins, last night, count of 7", () => {
   assert.equal(R.nightsLogged(rows, T), 2);
   assert.equal(R.hasNight(rows, " NOV 1 "), true);
 });
+
+test("coming up, split by kind", () => {
+  const tasks = [task({ title: "tomorrow", due: "2026-11-05" }), task({ title: "day7", due: "2026-11-11" }), task({ title: "day8", due: "2026-11-12" }), task({ title: "today", due: T }), task({ title: "done", due: "2026-11-06", status: "Done" })];
+  assert.deepEqual(R.weekTasks(tasks, T).map((x) => x.title), ["tomorrow", "day7"]);
+  const projects: Project[] = [
+    { id: "a", url: "", name: "A", status: "Active", next: "", focus: false, deadline: "2026-11-18" },
+    { id: "b", url: "", name: "B", status: "Active", next: "", focus: false, deadline: "2026-11-19" },
+    { id: "c", url: "", name: "C", status: "Active", next: "", focus: false, deadline: "2026-11-03" },
+  ];
+  assert.deepEqual(R.deadlinesSoon(projects, T).map((p) => p.name), ["A"]);
+  const bills: Bill[] = [
+    { id: "1", url: "", name: "Late", amount: 1, type: "", repeats: "", paid: false, due: "2026-11-01" },
+    { id: "2", url: "", name: "Soon", amount: 1, type: "", repeats: "", paid: false, due: "2026-11-10" },
+    { id: "3", url: "", name: "Paid", amount: 1, type: "", repeats: "", paid: true, due: "2026-11-10" },
+    { id: "4", url: "", name: "Far", amount: 1, type: "", repeats: "", paid: false, due: "2026-11-30" },
+  ];
+  assert.deepEqual(R.billsSoon(bills, T).map((b) => b.name), ["Late", "Soon"]);
+});

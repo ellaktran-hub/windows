@@ -13,7 +13,7 @@ async function request<T>(method: "GET" | "POST", path: string, data?: unknown):
   const write = method !== "GET";
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
-  const url = demo ? path + "?demo=" + encodeURIComponent(demo) : path;
+  const url = demo ? path + (path.includes("?") ? "&" : "?") + "demo=" + encodeURIComponent(demo) : path;
   let res: Response;
   try {
     // redirect: "manual" so an expired login shows up as a redirect, not a network error.

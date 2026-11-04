@@ -106,5 +106,17 @@ test("connect and callback routes", async () => {
   const cal = await app.request("https://hw.test/api/calendar");
   assert.deepEqual((await cal.json()).calendar, { connected: false, canConnect: true });
   const none = createApp({ notion: () => null, demo: false, google: () => ({ clientId: "", clientSecret: "", refreshToken: "" }) });
-  assert.deepEqual((await (await none.request("https://hw.test/api/calendar")).json()).calendar, { connected: false });
+  const sample = await (await none.request("https://hw.test/api/calendar")).json();
+  assert.equal(sample.source, "sample");
+  assert.equal(sample.calendar.connected, true, "sample calendar when nothing is connected");
+  const liveNoGoogle = createApp({ notion: () => ({}) as any, demo: false, google: () => ({ clientId: "", clientSecret: "", refreshToken: "" }) });
+  assert.deepEqual((await (await liveNoGoogle.request("https://hw.test/api/calendar")).json()).calendar, { connected: false });
+});
+
+test("calendar day must be today up to 13 days ahead", async () => {
+  const { addDays, todayStr } = await import("../shared/dates.js");
+  const app = createApp({ notion: () => null, demo: false, google: () => ({ clientId: "", clientSecret: "", refreshToken: "" }) });
+  const t = todayStr();
+  for (const ok of [t, addDays(t, 1), addDays(t, 13)]) assert.equal((await app.request("https://hw.test/api/calendar?day=" + ok)).status, 200, ok);
+  for (const bad of [addDays(t, -1), addDays(t, 14), "tomorrow", "2026-1-1"]) assert.equal((await app.request("https://hw.test/api/calendar?day=" + bad)).status, 400, bad);
 });

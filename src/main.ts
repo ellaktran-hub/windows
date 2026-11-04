@@ -21,7 +21,9 @@ const S = {
   projects: slot<Project[]>(),
   bills: slot<Bill[]>(),
   sleep: slot<SleepEntry[]>(),
-  cal: slot<Calendar>(),
+  cal: slot<Calendar>(), // today
+  calDay: 0, // which day the calendar shows: 0 is today, up to 6 days ahead
+  calAhead: {} as Record<number, Slot<Calendar>>, // days after today, loaded when tapped
   updated: null as number | null,
   refreshing: false,
   confirmDup: false,
@@ -62,7 +64,25 @@ const list = <T>(path: string) => async () => {
   return { source: r.source, data: r.items };
 };
 
+function calSlot(n: number): Slot<Calendar> {
+  if (n === 0) return S.cal;
+  return (S.calAhead[n] ||= slot<Calendar>());
+}
+const calFetch = (n: number) => async () => {
+  const r = await getJson<CalendarResponse>("/api/calendar?day=" + addDays(todayStr(), n));
+  return { source: r.source, data: r.calendar };
+};
+function pickDay(n: number) {
+  if (!Number.isInteger(n) || n < 0 || n > 6) return;
+  S.calDay = n;
+  const s = calSlot(n);
+  if (n !== 0 && (!s.data || s.status === "error")) void load(s, calFetch(n));
+  render();
+}
+
 async function refreshAll() {
+  // Other days reload fresh when tapped again.
+  for (const k of Object.keys(S.calAhead)) if (Number(k) !== S.calDay) delete S.calAhead[Number(k)];
   if (S.refreshing) return;
   S.refreshing = true;
   render();
@@ -71,7 +91,8 @@ async function refreshAll() {
     load(S.projects, list<Project>("/api/projects")),
     load(S.bills, list<Bill>("/api/bills")),
     load(S.sleep, list<SleepEntry>("/api/sleep")),
-    load(S.cal, async () => { const r = await getJson<CalendarResponse>("/api/calendar"); return { source: r.source, data: r.calendar }; }),
+    load(S.cal, calFetch(0)),
+    ...(S.calDay ? [load(calSlot(S.calDay), calFetch(S.calDay))] : []),
   ]);
   S.updated = Date.now();
   S.refreshing = false;
@@ -129,49 +150,63 @@ function hello(): string {
     (isSample() ? '<div class="note sample wide">Sample content. This is not your Notion data yet, and nothing you tap here is saved.</div>' : "");
 }
 
+function dayButtons(): string {
+  if (!S.cal.data || !S.cal.data.connected) return "";
+  const t = todayStr();
+  let h = '<div class="days" role="group" aria-label="Choose a day">';
+  for (let n = 0; n <= 6; n++) {
+    const d = addDays(t, n);
+    const name = n === 0 ? "today" : n === 1 ? "tomorrow" : weekday(d).slice(0, 3) + " " + Number(d.slice(8));
+    h += `<button class="day" type="button" data-act="day" data-day="${n}" aria-pressed="${S.calDay === n}">${esc(name)}</button>`;
+  }
+  return h + "</div>";
+}
+
+function calBody(c: Calendar, n: number): string {
+  if (!c.connected) return '<div class="meta">Work</div><div class="soft">The calendar is not connected yet.</div>' +
+    (c.canConnect ? '<div><a class="btn" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : "");
+  const when = n === 0 ? "today" : "that day";
+  const d = addDays(todayStr(), n);
+  let h = `<div class="meta">${esc(n === 0 ? "Work" : "Work · " + weekday(d) + " " + lbl(d))}</div>`;
+  if (c.work) h += `<div class="big">${esc(c.work)}</div>`;
+  else if (c.noWork.length) h += `<div class="big">No work ${when}</div>`;
+  else h += '<div class="soft">No shift on the calendar.</div>';
+  const tags = c.tags.concat(c.noWork);
+  if (tags.length) h += `<div class="row">${tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
+  h += "<hr>";
+  h += c.appts.length ? `<ul class="list">${c.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span><b>${esc(a.title)}</b></span></li>`).join("")}</ul>` : `<div class="meta">No appointments ${when}</div>`;
+  if (c.failed) h += '<div class="note">One calendar did not answer, so this may be missing something.</div>';
+  return h;
+}
+
 function todayView(): string {
   const t = todayStr(), tasks = S.tasks.data || [];
-  const cal = win("today.exe", "sky", sect(S.cal, (c) => {
-    if (!c.connected) return '<div class="meta">Work</div><div class="soft">The calendar is not connected yet.</div>' +
-      (c.canConnect ? '<div><a class="btn" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : "");
-    let h = '<div class="meta">Work</div>';
-    if (c.work) h += `<div class="big">${esc(c.work)}</div>`;
-    else if (c.noWork.length) h += '<div class="big">No work today</div>';
-    else h += '<div class="soft">No shift on the calendar.</div>';
-    const tags = c.tags.concat(c.noWork);
-    if (tags.length) h += `<div class="row">${tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
-    h += "<hr>";
-    h += c.appts.length ? `<ul class="list">${c.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span><b>${esc(a.title)}</b></span></li>`).join("")}</ul>` : '<div class="meta">No appointments today</div>';
-    if (c.failed) h += '<div class="note">One calendar did not answer, so this may be missing something.</div>';
-    return h;
-  }, "Google Calendar"));
+  const n = S.calDay;
+  const cal = win("today.exe", "sky", dayButtons() + sect(calSlot(n), (c) => calBody(c, n), "Google Calendar"));
   const keep = new Set(Object.keys(S.prevStatus));
   const top = R.top3(tasks, keep), due = R.dueToday(tasks, t, keep);
   const topW = win("top_3.txt", "butter", sect(S.tasks, () => top.length ? top.map(todo).join("") : '<div class="soft">No top 3 chosen. Tap "top 3" on up to three tasks.</div>'));
   const dueW = win("due_today.txt", "peach", sect(S.tasks, () => due.length ? due.map(todo).join("") : '<div class="soft">Nothing due today.</div>'));
   const sl = win("sleep.log", "lilac", sect(S.sleep, (rows) => nightSummary(R.lastNight(rows, t), true)));
-  return cal + topW + dueW + sl + win("coming_up.txt", "mint", comingBody(), true) + bubble();
-}
 
-function comingBody(): string {
-  const parts = [S.tasks, S.projects, S.bills];
-  if (parts.some((s) => !s.data && s.status === "loading")) return '<div class="meta">loading</div>';
-  if (parts.every((s) => !s.data)) return `<div class="note">${esc(errText(S.tasks.err, "Notion"))}</div><div><button class="btn" data-act="refresh">try again</button></div>`;
-  const t = todayStr();
-  const items = R.comingUp(t, S.tasks.data, S.projects.data, S.bills.data);
-  let h = items.length
-    ? `<ul class="list">${items.map((i) => {
-        const what = i.kind === "deadline" ? `<strong>${esc(i.title)} deadline.</strong> ${esc(i.detail)}`
-          : i.kind === "bill" ? `<strong>${esc(i.title)}</strong> ${esc(money(i.amount))}${i.pastDue ? ", past its due date" : ""}`
-          : `<strong>${esc(i.title)}</strong>`;
-        return `<li><span class="meta">${esc(lbl(i.date) + " · " + rel(i.date, t))}</span><span>${what}</span></li>`;
-      }).join("")}</ul>`
-    : '<div class="soft">Nothing dated in the next two weeks.</div>';
-  const steps = R.nextSteps(S.projects.data);
-  if (steps.length) h += `<hr><div class="meta">gentle next steps</div><ul class="list">${steps.map((p) => `<li><span><strong>${esc(p.name)}:</strong> ${esc(p.next)}</span></li>`).join("")}</ul>`;
-  const missing = (["tasks", "projects", "bills"] as const).filter((k) => !S[k].data && S[k].status === "error");
-  if (missing.length) h += `<div class="note">Could not read ${esc(missing.join(" and "))} just now. Tap refresh to try again.</div>`;
-  return h;
+  // coming up, split by kind
+  const week = win("this_week.txt", "mint", sect(S.tasks, () => {
+    const w = R.weekTasks(tasks, t, keep);
+    return w.length ? w.map(todo).join("") : '<div class="soft">No tasks due in the next 7 days.</div>';
+  }), true);
+  const dl = win("deadlines.txt", "lilac", sect(S.projects, (rows) => {
+    const ps = R.deadlinesSoon(rows, t);
+    return ps.length ? `<ul class="list">${ps.map((p) => `<li><span class="meta">${esc(lbl(p.deadline!) + " · " + rel(p.deadline!, t))}</span><span><b>${esc(p.name)}</b></span>${p.next ? `<span>${esc(p.next)}</span>` : ""}</li>`).join("")}</ul>` : '<div class="soft">No deadlines in the next two weeks.</div>';
+  }));
+  const bl = win("bills_soon.txt", "peach", sect(S.bills, (rows) => {
+    const bs = R.billsSoon(rows, t);
+    return '<div class="meta">view only</div>' + (bs.length ? `<ul class="list">${bs.map((b) => `<li><div class="line"><span><b>${esc(b.name)}</b></span><span>${esc(money(b.amount))}</span></div><span class="meta">${esc(lbl(b.due!) + " · " + (b.due! < t ? "past its due date" : rel(b.due!, t)))}</span></li>`).join("")}</ul>` : '<div class="soft">No bills due in the next two weeks.</div>');
+  }));
+  const steps = win("next_steps.txt", "butter", sect(S.projects, (rows) => {
+    const ps = R.nextSteps(rows);
+    return ps.length ? `<ul class="list">${ps.map((p) => `<li><span><strong>${esc(p.name)}:</strong> ${esc(p.next)}</span></li>`).join("")}</ul>` : '<div class="soft">No next steps written for Urgent or Active projects.</div>';
+  }), true);
+  return cal + topW + dueW + sl + week + dl + bl + steps + bubble();
 }
 
 function bubble(): string {
@@ -390,6 +425,7 @@ app.addEventListener("click", (e) => {
   const b = (e.target as HTMLElement).closest<HTMLElement>("[data-act]"); if (!b) return;
   const a = b.dataset.act, id = b.dataset.id || "";
   if (a === "refresh") void refreshAll();
+  else if (a === "day") pickDay(Number(b.dataset.day));
   else if (a === "toggle") void toggleDone(id);
   else if (a === "pin") void togglePin(id);
 });
@@ -415,7 +451,11 @@ app.addEventListener("submit", (e) => {
   if (f === "task") void addTask(); else if (f === "sleep") void saveSleep();
 });
 
+let enterTimer: ReturnType<typeof setTimeout> | undefined;
 function route() {
+  app.classList.add("enter");
+  clearTimeout(enterTimer);
+  enterTimer = setTimeout(() => app.classList.remove("enter"), 700);
   const h = location.hash.replace("#", "");
   S.tab = TABS.some(([k]) => k === h) ? h : "today";
   render();

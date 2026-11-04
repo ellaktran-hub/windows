@@ -11,9 +11,9 @@ import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import type { CalendarResponse, ListResponse } from "../shared/types.js";
 import { NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
-import { sampleData } from "./sample.js";
+import { sampleCalendar, sampleData } from "./sample.js";
 import { authUrl, exchangeCode, GoogleFail, readToday, type GoogleConfig } from "./google.js";
-import { todayStr } from "../shared/dates.js";
+import { addDays, todayStr } from "../shared/dates.js";
 
 export interface AppOptions<E extends object> {
   /** The Notion reader for this request, or null to show sample content. */
@@ -168,10 +168,18 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     if (d instanceof Response) return d;
     const g = opts.google(c);
     const source = opts.notion(c) ? "live" : "sample";
-    if (!g.clientId || !g.clientSecret) return c.json({ source, calendar: { connected: false } } satisfies CalendarResponse);
+    // Which day to show: today by default, or up to 13 days ahead.
+    const today = todayStr();
+    const day = c.req.query("day") || today;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < today || day > addDays(today, 13)) return c.json({ error: { code: "invalid", message: "day" } }, 400);
+    if (!g.clientId || !g.clientSecret) {
+      // With nothing real connected at all, show a marked sample calendar.
+      if (source === "sample") return c.json({ source, calendar: sampleCalendar(day) } satisfies CalendarResponse);
+      return c.json({ source, calendar: { connected: false } } satisfies CalendarResponse);
+    }
     if (!g.refreshToken) return c.json({ source, calendar: { connected: false, canConnect: true } } satisfies CalendarResponse);
     try {
-      const calendar = await readToday(g, todayStr());
+      const calendar = await readToday(g, day);
       return c.json({ source: "live", calendar } satisfies CalendarResponse);
     } catch (e) {
       const code = e instanceof GoogleFail ? e.code : "upstream_error";

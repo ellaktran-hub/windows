@@ -3,7 +3,7 @@
 // file is marked source: "sample" and the page shows a clear sample note.
 
 import { addDays, lbl, todayStr } from "../shared/dates.js";
-import type { Bill, Project, SleepEntry, Task } from "../shared/types.js";
+import type { Bill, Calendar, Project, SleepEntry, Task } from "../shared/types.js";
 
 export function sampleData() {
   const t = todayStr();
@@ -45,4 +45,12 @@ export function sampleData() {
   ];
 
   return { tasks, projects, bills, sleep };
+}
+
+/** A sample calendar for a day, only used when nothing real is connected. */
+export function sampleCalendar(day: string): Calendar {
+  const wd = new Date(day + "T12:00:00Z").getUTCDay();
+  if (wd === 0 || wd === 6) return { connected: true, work: null, noWork: ["Sample: Day off"], tags: [], appts: [{ sort: "0", time: "all day", title: "Sample: Farmers market" }], failed: 0 };
+  const appts = wd === 3 ? [{ sort: "1", time: "3:30 pm", title: "Sample: Allergist" }] : wd === 5 ? [{ sort: "1", time: "6:00 pm", title: "Sample: Dinner with Harry" }] : [];
+  return { connected: true, work: "9:00 am – 5:00 pm", noWork: [], tags: wd === 5 ? ["Sample: payday"] : [], appts, failed: 0 };
 }
