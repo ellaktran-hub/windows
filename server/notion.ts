@@ -2,8 +2,9 @@
 // Server side only: the token is passed in by the server entry and never
 // sent to the browser or written to logs.
 //
-// Reads, plus exactly four small writes (task status, Top 3, new task,
-// new sleep entry). There is no delete, archive, or trash call here.
+// Reads, plus a few small writes: task status, Top 3, new task, new sleep
+// entry, new bill, and a bill's Paid box (which only ticks the box; it
+// never pays anything). There is no delete, archive, or trash call here.
 
 import type { Bill, NoteBlock, Project, RichBit, SleepEntry, Task } from "../shared/types.js";
 
@@ -38,6 +39,9 @@ export const TASK_STATUSES = ["Not started", "In progress", "Done"] as const;
 export const TIME_BLOCKS = ["Morning", "Work day", "Lunch", "After work", "Evening"] as const;
 
 export interface NewTask { title: string; block: string; due: string | null }
+export const BILL_TYPES = ["Rent", "Utilities", "Other", "Yearly renewal"] as const;
+export const BILL_REPEATS = ["Monthly", "Yearly", "One-time"] as const;
+export interface NewBill { name: string; amount: number | null; due: string | null; repeats: string; type: string }
 export interface NewSleep { night: string; bed: string; wake: string; hours: number }
 
 export class NotionReader {
@@ -169,6 +173,31 @@ export class NotionReader {
     if (t.block) properties["Time block"] = { select: { name: t.block } };
     if (t.due) properties["Due"] = { date: { start: t.due } };
     await this.send("POST", "/pages", { parent: { type: "data_source_id", data_source_id: DS.tasks }, properties }, true);
+  }
+
+  /** Confirms a page really is a row in the Bills database before changing it. */
+  private async assertBill(pageId: string): Promise<string> {
+    const id = idOf(pageId);
+    if (!/^[0-9a-f]{32}$/.test(id)) throw new NotionFail("bad_request", 400, "bad id");
+    const p = await this.send("GET", `/pages/${id}`, undefined, false);
+    if (idOf(p?.parent?.data_source_id || "") !== idOf(DS.bills) || p.in_trash === true || p.archived === true) throw new NotionFail("not_a_bill", 400);
+    return id;
+  }
+
+  /** Ticks or unticks a bill's Paid box. It does not pay anything. */
+  async setBillPaid(pageId: string, paid: boolean): Promise<void> {
+    const id = await this.assertBill(pageId);
+    await this.send("PATCH", `/pages/${id}`, { properties: { Paid: { checkbox: paid === true } } }, true);
+  }
+
+  /** Adds a new bill, unpaid. */
+  async createBill(b: NewBill): Promise<void> {
+    const properties: Record<string, unknown> = { Bill: { title: [{ text: { content: b.name } }] } };
+    if (b.amount != null) properties["Amount"] = { number: b.amount };
+    if (b.due) properties["Due"] = { date: { start: b.due } };
+    if (b.repeats) properties["Repeats"] = { select: { name: b.repeats } };
+    if (b.type) properties["Type"] = { select: { name: b.type } };
+    await this.send("POST", "/pages", { parent: { type: "data_source_id", data_source_id: DS.bills }, properties }, true);
   }
 
   async createSleep(e: NewSleep): Promise<void> {

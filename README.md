@@ -105,7 +105,7 @@ npm test
 npm run audit:safety
 ```
 
-`audit:safety` fails if the code gains a way to delete, archive, pay, or mark a bill paid, or if anything that looks like a secret ends up in the built page.
+`audit:safety` fails if the code gains a way to delete, archive, or pay anything (cards, checkout, payment plans), or if anything that looks like a secret ends up in the built page. The bills tab can add a bill and tick or untick Paid, with a second tap to confirm. That only changes the box in Notion and never sends money.
 
 To see the error, empty, and slow states while developing, add `?demo=fail`, `?demo=empty`, or `?demo=slow` to the address, for example http://127.0.0.1:5173/?demo=fail.
 

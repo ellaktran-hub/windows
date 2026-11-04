@@ -124,8 +124,35 @@ test("an unknown write result comes back as unconfirmed", async () => {
 
 test("there is no route to delete anything or touch bills", async () => {
   const app = appWith({});
-  for (const [m, p] of [["DELETE", "/api/tasks/abc"], ["POST", "/api/bills"], ["POST", "/api/bills/abc/paid"], ["PATCH", "/api/tasks/abc"]]) {
+  for (const [m, p] of [["DELETE", "/api/tasks/abc"], ["DELETE", "/api/bills/abc"], ["POST", "/api/bills/abc/pay"], ["PATCH", "/api/tasks/abc"], ["PATCH", "/api/bills/abc"]]) {
     const r = await app.request("http://hw.test" + p, { method: m, headers: { "Content-Type": "application/json" }, body: "{}" });
     assert.equal(r.status, 404, m + " " + p);
   }
+});
+
+test("bills: add one, and tick Paid only on a real bill", async () => {
+  const seen: any[] = [];
+  const billRow = { object: "page", parent: { type: "data_source_id", data_source_id: DS.bills } };
+  const n = new NotionReader("t", fake([{ body: {} }, { body: billRow }, { body: {} }, { body: taskPage }], seen));
+  await n.createBill({ name: "Water", amount: 40.5, due: "2026-11-20", repeats: "Monthly", type: "Utilities" });
+  assert.deepEqual(seen[0].body, {
+    parent: { type: "data_source_id", data_source_id: DS.bills },
+    properties: { Bill: { title: [{ text: { content: "Water" } }] }, Amount: { number: 40.5 }, Due: { date: { start: "2026-11-20" } }, Repeats: { select: { name: "Monthly" } }, Type: { select: { name: "Utilities" } } },
+  });
+  assert.ok(!("Paid" in seen[0].body.properties), "a new bill is never marked paid");
+  await n.setBillPaid(TASK_ID, true);
+  assert.deepEqual(seen[2].body, { properties: { Paid: { checkbox: true } } });
+  await assert.rejects(n.setBillPaid(TASK_ID, true), isCode("not_a_bill"));
+  assert.equal(seen.length, 4, "no PATCH for a page outside Bills");
+});
+
+test("bill routes check their values", async () => {
+  const calls: unknown[] = [];
+  const app = appWith({ createBill: async (b: unknown) => { calls.push(b); }, setBillPaid: async (...a: unknown[]) => { calls.push(a); } });
+  for (const b of [{ name: "" }, { name: "x", amount: -1 }, { name: "x", amount: "12" }, { name: "x", type: "Food" }, { name: "x", repeats: "Weekly" }, { name: "x", due: "soon" }])
+    assert.equal((await post(app, "/api/bills", b)).status, 400, JSON.stringify(b));
+  assert.equal((await post(app, "/api/bills/abc/paid", { paid: "yes" })).status, 400);
+  assert.equal(calls.length, 0);
+  assert.equal((await post(app, "/api/bills", { name: " Water ", amount: 40.505, due: "2026-11-20", repeats: "", type: "" })).status, 200);
+  assert.deepEqual(calls[0], { name: "Water", amount: 40.51, due: "2026-11-20", repeats: "", type: "" });
 });

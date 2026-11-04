@@ -18,8 +18,8 @@ const banned = [
   [/\bin_trash"?\s*:/i, "moves a Notion page to trash"],
   [/method\s*:\s*["']DELETE["']/i, "sends a DELETE request"],
   [/app\.delete\(/, "adds a delete route"],
-  [/["']?Paid["']?\s*:\s*(true|false|"__YES__")/, "writes the Paid checkbox"],
-  [/\b(pay now|mark paid|add a card|payment plan)\b/i, "offers a payment action"],
+  // Ticking Paid is allowed (the owner chose this); paying, cards, and payment plans are not.
+  [/\b(pay now|add a card|payment plan|card number|checkout)\b/i, "offers a payment action"],
 ];
 for (const f of code) {
   const text = readFileSync(f, "utf8");

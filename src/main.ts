@@ -29,6 +29,8 @@ const S = {
   range: slot<CalendarRangeResponse>(), // the calendar tab, loaded when opened
   weekOpen: false, // this_week.txt showing everything
   billsGroup: "unpaid" as "unpaid" | "paid", // which bills the bills tab shows
+  billForm: false, // the add-a-bill form is open
+  confirmPaid: "", // the bill waiting for its second "mark paid" tap
   focusProject: "", // a project to scroll to when the projects tab opens
   openProject: "", // the project whose page is open (#project/<id>)
   notes: {} as Record<string, Slot<ProjectContentResponse>>, // project notes, loaded when a page opens
@@ -38,7 +40,7 @@ const S = {
   prevStatus: {} as Record<string, string>, // status a task had before it was marked Done
   doneKeep: {} as Record<string, Task>, // tasks marked done here, kept visible so they can be undone
   busy: {} as Record<string, boolean>, // a change is on its way for this task or form
-  draft: { task: "", block: "", due: "", night: "", bed: "", wake: "", hours: "", hoursTouched: false },
+  draft: { billName: "", billAmount: "", billDue: "", billRepeats: "", billType: "", task: "", block: "", due: "", night: "", bed: "", wake: "", hours: "", hoursTouched: false },
 };
 
 const app = document.getElementById("app")!;
@@ -252,8 +254,8 @@ function tasksView(): string {
 }
 
 // Bills are view only. There is deliberately no pay, mark-paid, or edit control here.
-// Bills are view only. There is deliberately no pay, mark-paid, or edit control here;
-// the switch only changes which bills are shown.
+// Bills: the owner chose to allow ticking Paid (with a second tap to confirm)
+// and adding bills. Nothing here pays, deletes, or edits amounts.
 const BILL_COLOR: Record<string, string> = { Rent: "peach", Utilities: "sky", "Yearly renewal": "lilac", Other: "butter" };
 function billsView(): string {
   const t = todayStr();
@@ -266,15 +268,35 @@ function billsView(): string {
   const sw = '<div class="status"><div class="days" role="group" aria-label="Which bills to show">' +
     `<button class="day" type="button" data-act="billsview" data-v="unpaid" aria-pressed="${!showPaid}">unpaid (${open.length})</button>` +
     `<button class="day" type="button" data-act="billsview" data-v="paid" aria-pressed="${showPaid}">paid (${paid.length})</button>` +
-    '</div><span class="meta">view only</span></div>';
+    '</div><span class="meta">marking paid only ticks the box in Notion</span></div>';
   const note = S.bills.status === "error" ? `<div class="note wide">${esc(errText(S.bills.err, "Notion"))} Showing the last copy.</div>` : "";
   const list = showPaid ? paid : open;
-  if (!list.length) return sw + note + win("bills.txt", "mint", `<div class="soft">${showPaid ? "No bills marked paid." : "No unpaid bills listed."}</div>`, true);
-  return sw + note + list.map((b) => {
+  const d = S.draft;
+  const opt = (vals: string[], cur: string) => '<option value="">none</option>' + vals.map((v) => `<option${cur === v ? " selected" : ""}>${v}</option>`).join("");
+  const form = S.billForm ? win("add_a_bill.exe", "sky",
+    '<form data-form="bill">' +
+    `<label for="billName">Bill<input id="billName" data-draft="billName" autocomplete="off" maxlength="120" value="${esc(d.billName)}"></label>` +
+    '<div class="fields">' +
+    `<label for="billAmount">Amount ($)<input id="billAmount" data-draft="billAmount" inputmode="decimal" autocomplete="off" value="${esc(d.billAmount)}"></label>` +
+    `<label for="billDue">Due<input id="billDue" type="date" data-draft="billDue" value="${esc(d.billDue)}"></label>` +
+    `<label for="billRepeats">Repeats<select id="billRepeats" data-draft="billRepeats">${opt(["Monthly", "Yearly", "One-time"], d.billRepeats)}</select></label>` +
+    `<label for="billType">Type<select id="billType" data-draft="billType">${opt(["Rent", "Utilities", "Other", "Yearly renewal"], d.billType)}</select></label>` +
+    "</div>" +
+    '<div class="meta">Adds a new bill to Notion. It does not pay or mark anything paid.</div>' +
+    `<div class="row"><button class="btn" type="submit"${S.busy.bill ? " disabled" : ""}>${S.busy.bill ? "adding" : "add to Notion"}</button><button class="btn quiet" type="button" data-act="billform">close</button></div>` +
+    "</form>", true) : "";
+  const addBtn = S.billForm ? "" : '<div class="status"><button class="btn" type="button" data-act="billform">add a bill</button></div>';
+  if (!list.length) return addBtn + form + sw + note + win("bills.txt", "mint", `<div class="soft">${showPaid ? "No bills marked paid." : "No unpaid bills listed."}</div>`, true);
+  return addBtn + form + sw + note + list.map((b) => {
     const when = b.due ? (showPaid ? lbl(b.due) : b.due < t ? lbl(b.due) + " · past its due date" : lbl(b.due) + " · due " + rel(b.due, t)) : "no date";
     const tags = [b.type, b.repeats].filter(Boolean).map((x) => `<span class="tag">${esc(x.toLowerCase())}</span>`).join("") + (showPaid ? '<span class="tag mint">paid</span>' : "");
+    const busy = !!S.busy["bill" + b.id];
+    const action = showPaid
+      ? `<button class="btn quiet" type="button" data-act="unpaid" data-id="${esc(b.id)}"${busy ? " disabled" : ""}>move back to unpaid</button>`
+      : `<button class="btn${S.confirmPaid === b.id ? "" : " quiet"}" type="button" data-act="paid" data-id="${esc(b.id)}"${busy ? " disabled" : ""}>${S.confirmPaid === b.id ? "tap again to confirm" : "mark paid"}</button>`;
     const body = `<div class="line"><span class="mid">${esc(b.name)}</span><span class="mid">${esc(money(b.amount))}</span></div>` +
-      `<div class="meta">${esc(when)}</div>` + (tags ? `<div class="row">${tags}</div>` : "");
+      `<div class="meta">${esc(when)}</div>` + (tags ? `<div class="row">${tags}</div>` : "") +
+      `<div class="row">${action}</div>`;
     return win(fileName(b.name), showPaid ? "mint" : BILL_COLOR[b.type] || "butter", body);
   }).join("");
 }
@@ -583,6 +605,54 @@ async function addTask() {
   }
 }
 
+let confirmTimer: ReturnType<typeof setTimeout> | undefined;
+async function setPaid(id: string, paid: boolean) {
+  const x = (S.bills.data || []).find((b) => b.id === id);
+  if (!x || S.busy["bill" + id]) return;
+  if (paid && S.confirmPaid !== id) {
+    // First tap only asks. The second tap, within a few seconds, marks it.
+    S.confirmPaid = id; render();
+    clearTimeout(confirmTimer);
+    confirmTimer = setTimeout(() => { if (S.confirmPaid === id) { S.confirmPaid = ""; render(); } }, 5000);
+    return;
+  }
+  S.confirmPaid = ""; clearTimeout(confirmTimer);
+  if (!isLive(S.bills)) { x.paid = paid; render(); toast(SAMPLE_NOTE); return; }
+  S.busy["bill" + id] = true; x.paid = paid; render();
+  try {
+    await postJson("/api/bills/" + encodeURIComponent(id) + "/paid", { paid });
+    S.busy["bill" + id] = false;
+    toast(paid ? "Marked paid in Notion." : "Moved back to unpaid in Notion.");
+    await pause(700);
+    await load(S.bills, list<Bill>("/api/bills"));
+  } catch (e) {
+    x.paid = !paid; S.busy["bill" + id] = false; render(); toast(writeMsg(e), true);
+  }
+}
+
+async function addBill() {
+  const d = S.draft, name = d.billName.trim();
+  if (S.busy.bill) return;
+  if (!name) { toast("Type the bill's name first.", true); return; }
+  const amt = d.billAmount.trim() === "" ? null : Number(d.billAmount.replace(/[$,\s]/g, ""));
+  if (amt !== null && (!isFinite(amt) || amt < 0)) { toast("The amount should be a number, like 64.50.", true); return; }
+  if (!S.bills.data) { toast("Bills are not loaded yet. Tap refresh, then try again.", true); return; }
+  const clear = () => { d.billName = ""; d.billAmount = ""; d.billDue = ""; d.billRepeats = ""; d.billType = ""; };
+  if (!isLive(S.bills)) {
+    S.bills.data.push({ id: "local-" + Date.now(), url: "", name, amount: amt, type: d.billType, repeats: d.billRepeats, paid: false, due: d.billDue || null });
+    clear(); S.billForm = false; S.billsGroup = "unpaid"; render(); toast(SAMPLE_NOTE); return;
+  }
+  S.busy.bill = true; render();
+  try {
+    await postJson("/api/bills", { name, amount: amt, due: d.billDue || null, repeats: d.billRepeats, type: d.billType });
+    clear(); S.busy.bill = false; S.billForm = false; S.billsGroup = "unpaid"; toast("Bill added to Notion.");
+    await pause(700);
+    await load(S.bills, list<Bill>("/api/bills"));
+  } catch (e) {
+    S.busy.bill = false; render(); toast(writeMsg(e).replace("Nothing was changed.", "Nothing was added."), true);
+  }
+}
+
 async function saveSleep() {
   const d = S.draft, night = d.night.trim(), hrs = parseFloat(d.hours);
   if (S.busy.sleep) return;
@@ -613,6 +683,9 @@ app.addEventListener("click", (e) => {
   if (a === "refresh") void refreshAll();
   else if (a === "day") pickDay(Number(b.dataset.day));
   else if (a === "week") { S.weekOpen = !S.weekOpen; render(); }
+  else if (a === "paid") void setPaid(id, true);
+  else if (a === "unpaid") void setPaid(id, false);
+  else if (a === "billform") { S.billForm = !S.billForm; render(); if (S.billForm) document.getElementById("billName")?.focus(); }
   else if (a === "billsview") { S.billsGroup = b.dataset.v === "paid" ? "paid" : "unpaid"; render(); }
   else if (a === "goproject") { e.preventDefault(); goProject(id); }
   else if (a === "backprojects") { e.preventDefault(); goProject(id); }
@@ -638,7 +711,7 @@ app.addEventListener("change", (e) => {
 app.addEventListener("submit", (e) => {
   e.preventDefault();
   const f = (e.target as HTMLFormElement).dataset.form;
-  if (f === "task") void addTask(); else if (f === "sleep") void saveSleep();
+  if (f === "task") void addTask(); else if (f === "sleep") void saveSleep(); else if (f === "bill") void addBill();
 });
 
 function route() {

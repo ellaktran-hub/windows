@@ -2,15 +2,17 @@
 // Cloudflare version (worker.ts).
 //
 // Safety rules kept in this file:
-// - There are no routes that delete, archive, pay, or mark a bill paid.
-// - The only writes: a task's Status or Top 3, a new task, a new sleep entry.
+// - There are no routes that delete, archive, or pay anything.
+// - The only writes: a task's Status or Top 3, a new task, a new sleep entry,
+//   a new bill, and a bill's Paid box (the owner chose to allow this; the
+//   page asks for a second tap first).
 //   Each checks its input, and none of them retries on its own.
 // - Errors are logged as short codes only, never tokens or row content.
 
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import type { CalendarRangeResponse, CalendarResponse, ListResponse, ProjectContentResponse } from "../shared/types.js";
-import { NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
+import { BILL_REPEATS, BILL_TYPES, NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
 import { sampleCalendar, sampleData, sampleNotes } from "./sample.js";
 import { authUrl, exchangeCode, GoogleFail, readRange, readToday, type GoogleConfig } from "./google.js";
 import { addDays, todayStr } from "../shared/dates.js";
@@ -142,6 +144,37 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     if (!notion) return c.json({ ok: true, source: "sample" });
     try { await notion.createTask({ title, block, due: due as string | null }); return c.json({ ok: true, source: "live" }); }
     catch (e) { return writeFail(c, "new task", e); }
+  });
+
+  app.post("/api/bills/:id/paid", async (c) => {
+    const b = await body(c);
+    if (typeof b?.paid !== "boolean") return bad(c, "paid");
+    const dm = await writeDemo(c); if (dm instanceof Response) return dm;
+    const notion = opts.notion(c);
+    if (!notion) return c.json({ ok: true, source: "sample" });
+    try { await notion.setBillPaid(c.req.param("id"), b.paid); return c.json({ ok: true, source: "live" }); }
+    catch (e) { return writeFail(c, "bill paid", e); }
+  });
+
+  app.post("/api/bills", async (c) => {
+    const b = await body(c);
+    const name = typeof b?.name === "string" ? b.name.trim() : "";
+    const amount = b?.amount == null || b.amount === "" ? null : b.amount;
+    const due = b?.due == null || b.due === "" ? null : b.due;
+    const repeats = typeof b?.repeats === "string" ? b.repeats : "";
+    const type = typeof b?.type === "string" ? b.type : "";
+    if (!name || name.length > 120) return bad(c, "name");
+    if (amount !== null && (typeof amount !== "number" || !isFinite(amount) || amount < 0 || amount > 1e7)) return bad(c, "amount");
+    if (due !== null && !isDay(due)) return bad(c, "due");
+    if (repeats && !(BILL_REPEATS as readonly string[]).includes(repeats)) return bad(c, "repeats");
+    if (type && !(BILL_TYPES as readonly string[]).includes(type)) return bad(c, "type");
+    const dm = await writeDemo(c); if (dm instanceof Response) return dm;
+    const notion = opts.notion(c);
+    if (!notion) return c.json({ ok: true, source: "sample" });
+    try {
+      await notion.createBill({ name, amount: amount === null ? null : Math.round((amount as number) * 100) / 100, due: due as string | null, repeats, type });
+      return c.json({ ok: true, source: "live" });
+    } catch (e) { return writeFail(c, "new bill", e); }
   });
 
   app.post("/api/sleep", async (c) => {
