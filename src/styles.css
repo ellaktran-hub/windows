@@ -101,6 +101,13 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .list li { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .line { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
 .line > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; }
+.steps > li { display: grid; gap: 6px; padding: 12px 0; border-top: 2px dashed rgba(90, 51, 38, 0.3); min-width: 0; overflow-wrap: anywhere; }
+.steps > li:first-child { border-top: 0; padding-top: 0; }
+.steps > li:last-child { padding-bottom: 0; }
+.step { padding-left: 14px; position: relative; }
+.step::before { content: ""; position: absolute; left: 0; top: 0.6em; width: 6px; height: 6px; background: var(--coral); }
+.step + .step { margin-top: 4px; }
 .note { font-size: 13px; background: var(--paper); border: 2px dashed var(--ink); border-radius: 6px; padding: 8px 12px; }
 .note.sample { background: var(--mint); border-style: solid; font-weight: 700; }
 

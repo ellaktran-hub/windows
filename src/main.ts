@@ -217,7 +217,7 @@ function todayView(): string {
   }));
   const steps = win("next_steps.txt", "butter", sect(S.projects, (rows) => {
     const ps = R.nextSteps(rows);
-    return ps.length ? `<ul class="list">${ps.map((p) => `<li><span><strong>${esc(p.name)}:</strong> ${esc(p.next)}</span></li>`).join("")}</ul>` : '<div class="soft">No next steps written for Urgent or Active projects.</div>';
+    return ps.length ? `<ul class="steps">${ps.map((p) => `<li><span class="meta">${esc(p.name)}</span>${stepLines(p.next)}</li>`).join("")}</ul>` : '<div class="soft">No next steps written for Urgent or Active projects.</div>';
   }), true);
   return cal + topW + dueW + sl + week + dl + bl + steps + bubble();
 }
@@ -262,6 +262,13 @@ function billsView(): string {
 const STATUS_ORDER = ["Urgent", "Active", "Ongoing", "Later"];
 const STATUS_COLOR: Record<string, string> = { Urgent: "peach", Active: "butter", Ongoing: "mint", Later: "lilac" };
 /** "Move out!" -> "move_out.txt", like the other window names. */
+/** A Next step with several lines shows each line as its own step. */
+function stepLines(next: string): string {
+  const lines = next.split(/\r?\n+/).map((x) => x.replace(/^\s*([-*•]|\d+[.)])\s*/, "").trim()).filter(Boolean);
+  if (lines.length <= 1) return `<div class="step">${esc(lines[0] || next)}</div>`;
+  return lines.map((x) => `<div class="step">${esc(x)}</div>`).join("");
+}
+
 function fileName(name: string): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 28);
   return (slug || "project") + ".txt";
@@ -285,7 +292,7 @@ function projectsView(): string {
       (n ? `<span class="tag">${n} open</span>` : "");
     const body = `<div class="mid">${esc(p.name)}</div>` +
       (tags ? `<div class="row">${tags}</div>` : "") +
-      (p.next ? `<div><span class="meta">next step</span><br>${esc(p.next)}</div>` : '<div class="meta">no next step written</div>') +
+      (p.next ? `<div class="stack tight"><span class="meta">next step</span>${stepLines(p.next)}</div>` : '<div class="meta">no next step written</div>') +
       `<div><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
     return win(fileName(p.name), color, body);
   }).join("");
