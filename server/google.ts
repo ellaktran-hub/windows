@@ -91,10 +91,31 @@ export function midnight(day: string): string {
   return `${day}T00:00:00${off}`;
 }
 
-interface GEvent { status?: string; summary?: string; start?: { date?: string; dateTime?: string }; end?: { date?: string; dateTime?: string } }
+interface GEvent { status?: string; summary?: string; htmlLink?: string; start?: { date?: string; dateTime?: string }; end?: { date?: string; dateTime?: string } }
 
-/** Today's calendar, shaped for today.exe. One failing calendar does not stop the rest. */
-export async function readToday(cfg: GoogleConfig, today: string, fetchImpl: Fetch = (i, n) => fetch(i, n)): Promise<Calendar> {
+/** Only real Google Calendar addresses are passed on as links. */
+export function safeLink(u: unknown): string | undefined {
+  if (typeof u !== "string") return undefined;
+  try {
+    const x = new URL(u);
+    return x.protocol === "https:" && (x.hostname === "www.google.com" || x.hostname === "calendar.google.com") ? x.toString() : undefined;
+  } catch { return undefined; }
+}
+
+/** Google Calendar's own page for a day, to open and edit there. */
+export function dayLink(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return `https://calendar.google.com/calendar/r/day/${y}/${m}/${d}`;
+}
+
+const dayOf = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ });
+
+/**
+ * Calendar for several days in a row, shaped like today.exe for each day.
+ * One request per calendar covers the whole range. One failing calendar
+ * does not stop the rest; all failing is an error.
+ */
+export async function readRange(cfg: GoogleConfig, start: string, days: number, fetchImpl: Fetch = (i, n) => fetch(i, n)): Promise<Record<string, Calendar>> {
   const token = await accessToken(cfg, fetchImpl);
   const list = await getJson(`${API}/users/me/calendarList?minAccessRole=reader&maxResults=250`, token, fetchImpl);
   const items: Array<{ id: string; summary?: string; summaryOverride?: string }> = Array.isArray(list?.items) ? list.items : [];
@@ -102,44 +123,64 @@ export async function readToday(cfg: GoogleConfig, today: string, fetchImpl: Fet
     .map((c) => ({ id: c.id, name: (c.summaryOverride || c.summary || "").trim() }))
     .filter((c) => WANT.includes(c.name));
 
-  const timeMin = midnight(today), timeMax = midnight(addDays(today, 1));
+  const end = addDays(start, days);
+  const timeMin = midnight(start), timeMax = midnight(end);
   const results = await Promise.allSettled(cals.map(async (c) => {
-    const q = new URLSearchParams({ timeMin, timeMax, singleEvents: "true", orderBy: "startTime", timeZone: TZ, maxResults: "50" });
+    const q = new URLSearchParams({ timeMin, timeMax, singleEvents: "true", orderBy: "startTime", timeZone: TZ, maxResults: "250" });
     const r = await getJson(`${API}/calendars/${encodeURIComponent(c.id)}/events?${q}`, token, fetchImpl);
     return { cal: c.name, events: (Array.isArray(r?.items) ? r.items : []) as GEvent[] };
   }));
 
-  const out = { connected: true as const, work: null as string | null, noWork: [] as string[], tags: [] as string[], appts: [] as Appointment[], failed: 0 };
-  const starts: string[] = [], ends: string[] = [];
+  const dayList: string[] = []; for (let i = 0; i < days; i++) dayList.push(addDays(start, i));
+  const failed = results.filter((r) => r.status !== "fulfilled").length;
+  const acc: Record<string, { tags: string[]; noWork: string[]; appts: Appointment[]; starts: string[]; ends: string[] }> = {};
+  for (const d of dayList) acc[d] = { tags: [], noWork: [], appts: [], starts: [], ends: [] };
+
   for (const r of results) {
-    if (r.status !== "fulfilled") { out.failed++; continue; }
+    if (r.status !== "fulfilled") continue;
     for (const ev of r.value.events) {
       if (!ev || ev.status === "cancelled" || !ev.summary || !ev.start) continue;
-      const timed = !!ev.start.dateTime;
-      if (!timed) {
-        const s = ev.start.date || "", e = ev.end?.date || addDays(s, 1);
-        if (!(s <= today && today < e)) continue;
-      }
-      if (r.value.cal === "Work") {
-        if (timed) { starts.push(ev.start.dateTime!); ends.push(ev.end?.dateTime || ev.start.dateTime!); }
-        else out.tags.push(ev.summary);
-      } else if (r.value.cal === "No Work") {
-        out.noWork.push(ev.summary);
+      const link = safeLink(ev.htmlLink);
+      if (ev.start.dateTime) {
+        const d = dayOf(ev.start.dateTime);
+        const a = acc[d]; if (!a) continue;
+        if (r.value.cal === "Work") { a.starts.push(ev.start.dateTime); a.ends.push(ev.end?.dateTime || ev.start.dateTime); }
+        else if (r.value.cal === "No Work") a.noWork.push(ev.summary);
+        else a.appts.push({ sort: ev.start.dateTime, time: fmtTime(ev.start.dateTime), title: ev.summary, ...(link ? { link } : {}) });
       } else {
-        out.appts.push({ sort: timed ? ev.start.dateTime! : "0", time: timed ? fmtTime(ev.start.dateTime!) : "all day", title: ev.summary });
+        const s0 = ev.start.date || "", e0 = ev.end?.date || addDays(s0, 1);
+        for (const d of dayList) {
+          if (!(s0 <= d && d < e0)) continue;
+          const a = acc[d];
+          if (r.value.cal === "Work") a.tags.push(ev.summary);
+          else if (r.value.cal === "No Work") a.noWork.push(ev.summary);
+          else a.appts.push({ sort: "0", time: "all day", title: ev.summary, ...(link ? { link } : {}) });
+        }
       }
     }
   }
-  if (starts.length) {
-    starts.sort((a, b) => +new Date(a) - +new Date(b));
-    ends.sort((a, b) => +new Date(b) - +new Date(a));
-    out.work = fmtTime(starts[0]) + " – " + fmtTime(ends[0]);
-  }
-  out.appts.sort((a, b) => (a.sort < b.sort ? -1 : 1));
-  // If every calendar failed, that's an error, not an empty day.
-  if (cals.length && out.failed === cals.length) {
+
+  if (cals.length && failed === cals.length) {
     const first = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
     throw first?.reason instanceof GoogleFail ? first.reason : new GoogleFail("upstream_error");
   }
+
+  const out: Record<string, Calendar> = {};
+  for (const d of dayList) {
+    const a = acc[d];
+    let work: string | null = null;
+    if (a.starts.length) {
+      a.starts.sort((x, y) => +new Date(x) - +new Date(y));
+      a.ends.sort((x, y) => +new Date(y) - +new Date(x));
+      work = fmtTime(a.starts[0]) + " – " + fmtTime(a.ends[0]);
+    }
+    a.appts.sort((x, y) => (x.sort < y.sort ? -1 : x.sort > y.sort ? 1 : 0));
+    out[d] = { connected: true, work, noWork: a.noWork, tags: a.tags, appts: a.appts, failed };
+  }
   return out;
+}
+
+/** One day's calendar, shaped for today.exe. */
+export async function readToday(cfg: GoogleConfig, today: string, fetchImpl: Fetch = (i, n) => fetch(i, n)): Promise<Calendar> {
+  return (await readRange(cfg, today, 1, fetchImpl))[today];
 }

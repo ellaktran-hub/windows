@@ -54,6 +54,8 @@ body {
 .hello .body { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .heart { width: 64px; height: 57px; fill: var(--coral); }
 .soft { font-family: var(--font-serif); font-style: italic; font-size: 17px; }
+.mid { font-family: var(--font-serif); font-size: 22px; line-height: 1.15; }
+a.link { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--coral-ink); text-transform: lowercase; }
 .big { font-family: var(--font-serif); font-size: 30px; line-height: 1.1; }
 .meta { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; }
 .row { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }

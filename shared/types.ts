@@ -49,6 +49,7 @@ export interface Appointment {
   sort: string;
   time: string;
   title: string;
+  link?: string; // the event in Google Calendar, for editing there
 }
 
 export type Calendar =
@@ -59,6 +60,9 @@ export interface ListResponse<T> {
   source: Source;
   items: T[];
 }
+
+export interface CalendarDay { day: string; calendar: Calendar }
+export interface CalendarRangeResponse { source: Source; days: CalendarDay[]; connected: boolean; canConnect?: boolean }
 
 export interface CalendarResponse {
   source: Source;

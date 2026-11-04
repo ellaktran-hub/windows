@@ -9,10 +9,10 @@
 
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
-import type { CalendarResponse, ListResponse } from "../shared/types.js";
+import type { CalendarRangeResponse, CalendarResponse, ListResponse } from "../shared/types.js";
 import { NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
 import { sampleCalendar, sampleData } from "./sample.js";
-import { authUrl, exchangeCode, GoogleFail, readToday, type GoogleConfig } from "./google.js";
+import { authUrl, exchangeCode, GoogleFail, readRange, readToday, type GoogleConfig } from "./google.js";
 import { addDays, todayStr } from "../shared/dates.js";
 
 export interface AppOptions<E extends object> {
@@ -184,6 +184,29 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     } catch (e) {
       const code = e instanceof GoogleFail ? e.code : "upstream_error";
       console.warn(`google read failed: ${code}${e instanceof GoogleFail && e.status ? " (" + e.status + ")" : ""}`);
+      return c.json({ error: { code, message: "Calendar read failed" } }, code === "google_reconnect" ? 401 : code === "rate_limited" ? 429 : 502);
+    }
+  });
+
+  // The calendar tab: up to 14 days starting today.
+  app.get("/api/calendar/range", async (c) => {
+    const d = await demo(c);
+    if (d instanceof Response) return d;
+    const today = todayStr();
+    const days = Math.min(14, Math.max(1, Number(c.req.query("days") || 14) | 0));
+    const g = opts.google(c);
+    const source = opts.notion(c) ? "live" : "sample";
+    const list: string[] = []; for (let i = 0; i < days; i++) list.push(addDays(today, i));
+    if (!g.clientId || !g.clientSecret || !g.refreshToken) {
+      if (source === "sample" && !g.clientId) return c.json({ source, connected: true, days: list.map((day) => ({ day, calendar: sampleCalendar(day) })) } satisfies CalendarRangeResponse);
+      return c.json({ source, connected: false, canConnect: !!(g.clientId && g.clientSecret), days: [] } satisfies CalendarRangeResponse);
+    }
+    try {
+      const byDay = await readRange(g, today, days);
+      return c.json({ source: "live", connected: true, days: list.map((day) => ({ day, calendar: byDay[day] })) } satisfies CalendarRangeResponse);
+    } catch (e) {
+      const code = e instanceof GoogleFail ? e.code : "upstream_error";
+      console.warn(`google range read failed: ${code}`);
       return c.json({ error: { code, message: "Calendar read failed" } }, code === "google_reconnect" ? 401 : code === "rate_limited" ? 429 : 502);
     }
   });

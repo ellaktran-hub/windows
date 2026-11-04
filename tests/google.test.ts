@@ -120,3 +120,39 @@ test("calendar day must be today up to 13 days ahead", async () => {
   for (const ok of [t, addDays(t, 1), addDays(t, 13)]) assert.equal((await app.request("https://hw.test/api/calendar?day=" + ok)).status, 200, ok);
   for (const bad of [addDays(t, -1), addDays(t, 14), "tomorrow", "2026-1-1"]) assert.equal((await app.request("https://hw.test/api/calendar?day=" + bad)).status, 400, bad);
 });
+
+test("two weeks: events land on the right day, with safe links only", async () => {
+  const { readRange, safeLink } = await import("../server/google.js");
+  resetGoogleCache();
+  const f = (async (url: string) => {
+    const j = (o: unknown) => new Response(JSON.stringify(o));
+    if (String(url).includes("oauth2")) return j({ access_token: "at", expires_in: 3600 });
+    if (String(url).includes("calendarList")) return j({ items: [{ id: "w", summary: "Work" }, { id: "a", summary: "Appointments" }] });
+    if (String(url).includes("/calendars/w/")) return j({ items: [
+      { summary: "Shift", start: { dateTime: "2026-11-05T09:00:00-05:00" }, end: { dateTime: "2026-11-05T17:00:00-05:00" } },
+      { summary: "payday", start: { date: "2026-11-06" }, end: { date: "2026-11-07" } },
+    ] });
+    return j({ items: [
+      { summary: "Late", htmlLink: "https://www.google.com/calendar/event?eid=abc", start: { dateTime: "2026-11-05T23:30:00-05:00" }, end: { dateTime: "2026-11-06T00:30:00-05:00" } },
+      { summary: "Trip", htmlLink: "javascript:alert(1)", start: { date: "2026-11-06" }, end: { date: "2026-11-08" } },
+    ] });
+  }) as typeof fetch;
+  const r = await readRange(cfg, "2026-11-04", 4, f);
+  assert.deepEqual(Object.keys(r), ["2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"]);
+  const d5 = r["2026-11-05"], d6 = r["2026-11-06"], d7 = r["2026-11-07"];
+  if (!d5.connected || !d6.connected || !d7.connected) throw new Error("connected");
+  assert.equal(d5.work, "9:00 am – 5:00 pm");
+  assert.deepEqual(d5.appts.map((a) => [a.title, a.link]), [["Late", "https://www.google.com/calendar/event?eid=abc"]], "late-night event stays on its own day");
+  assert.deepEqual(d6.tags, ["payday"]);
+  assert.deepEqual(d6.appts.map((a) => [a.title, a.link]), [["Trip", undefined]], "unsafe link dropped");
+  assert.deepEqual(d7.appts.map((a) => a.title), ["Trip"], "multi-day event shows on each day");
+  assert.equal(safeLink("https://calendar.google.com/calendar/r"), "https://calendar.google.com/calendar/r");
+  assert.equal(safeLink("https://evil.example/calendar"), undefined);
+});
+
+test("calendar range route caps at 14 days", async () => {
+  const app = createApp({ notion: () => null, demo: false, google: () => ({ clientId: "", clientSecret: "", refreshToken: "" }) });
+  const r = await (await app.request("https://hw.test/api/calendar/range?days=99")).json();
+  assert.equal(r.days.length, 14);
+  assert.equal(r.source, "sample");
+});

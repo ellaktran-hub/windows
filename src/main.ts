@@ -4,7 +4,7 @@
 
 import "./styles.css";
 import { addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
-import type { Bill, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
+import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
 import * as R from "./rules.js";
 
@@ -12,8 +12,9 @@ type Status = "loading" | "ok" | "error";
 interface Slot<T> { status: Status; data: T | null; err: unknown; source: Source | null }
 const slot = <T>(): Slot<T> => ({ status: "loading", data: null, err: null, source: null });
 
+const WEEK_LIMIT = 3;
 const BLOCKS = ["Morning", "Work day", "Lunch", "After work", "Evening"];
-const TABS: Array<[string, string]> = [["today", "today"], ["tasks", "tasks"], ["bills", "bills"], ["projects", "projects"], ["sleep", "sleep"]];
+const TABS: Array<[string, string]> = [["today", "today"], ["calendar", "calendar"], ["tasks", "tasks"], ["bills", "bills"], ["projects", "projects"], ["sleep", "sleep"]];
 
 const S = {
   tab: "today",
@@ -24,6 +25,8 @@ const S = {
   cal: slot<Calendar>(), // today
   calDay: 0, // which day the calendar shows: 0 is today, up to 6 days ahead
   calAhead: {} as Record<number, Slot<Calendar>>, // days after today, loaded when tapped
+  range: slot<CalendarRangeResponse>(), // the calendar tab, loaded when opened
+  weekOpen: false, // this_week.txt showing everything
   updated: null as number | null,
   refreshing: false,
   confirmDup: false,
@@ -64,6 +67,10 @@ const list = <T>(path: string) => async () => {
   return { source: r.source, data: r.items };
 };
 
+async function loadRange() {
+  await load(S.range, async () => { const r = await getJson<CalendarRangeResponse>("/api/calendar/range?days=14"); return { source: r.source, data: r }; });
+}
+
 function calSlot(n: number): Slot<Calendar> {
   if (n === 0) return S.cal;
   return (S.calAhead[n] ||= slot<Calendar>());
@@ -94,6 +101,7 @@ async function refreshAll() {
     load(S.cal, calFetch(0)),
     ...(S.calDay ? [load(calSlot(S.calDay), calFetch(S.calDay))] : []),
   ]);
+  if (S.tab === "calendar" || S.range.data) await loadRange();
   S.updated = Date.now();
   S.refreshing = false;
   render();
@@ -191,7 +199,13 @@ function todayView(): string {
   // coming up, split by kind
   const week = win("this_week.txt", "mint", sect(S.tasks, () => {
     const w = R.weekTasks(tasks, t, keep);
-    return w.length ? w.map(todo).join("") : '<div class="soft">No tasks due in the next 7 days.</div>';
+    if (!w.length) return '<div class="soft">No tasks due in the next 7 days.</div>';
+    // Keep Today calm: the first few, and the rest only when asked for.
+    const shown = S.weekOpen ? w : w.slice(0, WEEK_LIMIT);
+    const more = w.length - WEEK_LIMIT;
+    return shown.map(todo).join("") + (more > 0
+      ? `<div><button class="btn quiet" type="button" data-act="week" aria-expanded="${S.weekOpen}">${S.weekOpen ? "show fewer" : "show " + more + " more"}</button></div>`
+      : "");
   }), true);
   const dl = win("deadlines.txt", "lilac", sect(S.projects, (rows) => {
     const ps = R.deadlinesSoon(rows, t);
@@ -288,8 +302,40 @@ function sleepView(): string {
   return last + form + wk;
 }
 
+const DAY_COLORS = ["sky", "mint", "lilac", "butter", "peach", "pink"];
+function calendarView(): string {
+  const t = todayStr();
+  const r = S.range;
+  if (!r.data) return win("calendar.txt", "sky", sect(r, () => "", "Google Calendar"), true);
+  const d = r.data;
+  const note = r.status === "error" ? `<div class="note wide">${esc(errText(r.err, "Google Calendar"))} Showing the last copy.</div>` : "";
+  if (!d.connected) {
+    return win("calendar.txt", "sky", '<div class="soft">The calendar is not connected yet.</div>' +
+      (d.canConnect ? '<div><a class="btn" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : ""), true);
+  }
+  const intro = win("calendar.txt", "sky",
+    '<div class="soft">The next two weeks. To change something, open it in Google Calendar.</div>' +
+    '<div><a class="btn" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer">open Google Calendar</a></div>', true);
+  const days = d.days.map(({ day, calendar: c }, i) => {
+    if (!c.connected) return "";
+    const name = (weekday(day).slice(0, 3) + "_" + lbl(day).replace(" ", "_")).toLowerCase() + ".txt";
+    const when = day === t ? "today" : "that day";
+    let h = `<div class="row"><span class="meta">${esc(weekday(day) + " · " + lbl(day))}</span>${day === t ? '<span class="tag butter">today</span>' : ""}</div>`;
+    h += `<div class="mid">${esc(c.work ? "Work " + c.work : "No work " + when)}</div>`;
+    if (c.tags.length) h += `<div class="row">${c.tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
+    h += c.appts.length
+      ? `<ul class="list">${c.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span>${a.link ? `<a class="plain" href="${esc(a.link)}" target="_blank" rel="noopener noreferrer"><b>${esc(a.title)}</b></a>` : `<b>${esc(a.title)}</b>`}</span></li>`).join("")}</ul>`
+      : `<div class="meta">No appointments</div>`;
+    const [y, m, dd] = day.split("-").map(Number);
+    h += `<div><a class="link" href="https://calendar.google.com/calendar/r/day/${y}/${m}/${dd}" target="_blank" rel="noopener noreferrer">open in Google Calendar</a></div>`;
+    return win(name, DAY_COLORS[i % DAY_COLORS.length], h);
+  }).join("");
+  const failed = d.days.some((x) => x.calendar.connected && x.calendar.failed) ? '<div class="note wide">One calendar did not answer, so this may be missing something.</div>' : "";
+  return intro + note + failed + days;
+}
+
 function view(): string {
-  const v = S.tab === "tasks" ? tasksView() : S.tab === "bills" ? billsView() : S.tab === "projects" ? projectsView() : S.tab === "sleep" ? sleepView() : todayView();
+  const v = S.tab === "calendar" ? calendarView() : S.tab === "tasks" ? tasksView() : S.tab === "bills" ? billsView() : S.tab === "projects" ? projectsView() : S.tab === "sleep" ? sleepView() : todayView();
   return hello() + v + '<div class="foot">thank you for showing up today</div>';
 }
 
@@ -425,6 +471,7 @@ app.addEventListener("click", (e) => {
   const a = b.dataset.act, id = b.dataset.id || "";
   if (a === "refresh") void refreshAll();
   else if (a === "day") pickDay(Number(b.dataset.day));
+  else if (a === "week") { S.weekOpen = !S.weekOpen; render(); }
   else if (a === "toggle") void toggleDone(id);
   else if (a === "pin") void togglePin(id);
 });
@@ -457,6 +504,7 @@ function route() {
   enterTimer = setTimeout(() => app.classList.remove("enter"), 700);
   const h = location.hash.replace("#", "");
   S.tab = TABS.some(([k]) => k === h) ? h : "today";
+  if (S.tab === "calendar" && !S.range.data && S.range.status !== "error" && S.updated) void loadRange();
   render();
 }
 window.addEventListener("hashchange", () => { route(); window.scrollTo(0, 0); });
