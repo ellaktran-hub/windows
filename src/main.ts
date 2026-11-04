@@ -423,9 +423,36 @@ function projectPageView(): string {
     `<div><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`, true);
   const taskW = win("tasks.txt", "sky", sect(S.tasks, () => tasks.length ? tasks.map(todo).join("") : '<div class="soft">No open tasks for this project.</div>'), true);
   const ns = S.notes[p.id] || slot<ProjectContentResponse>();
-  const notesW = win("notes.txt", "mint", sect(ns, (r) =>
-    '<div class="meta">read only · edit in Notion</div><div class="notes">' + notesHtml(r.blocks) + "</div>" +
-    (r.truncated ? '<div class="note">This page is long, so only the first part shows here. The rest is in Notion.</div>' : "")), true);
+  let notesW: string;
+  if (!ns.data) {
+    notesW = win("notes.txt", "mint", sect(ns, () => ""), true);
+  } else {
+    // Each heading starts its own window; anything before the first heading goes in notes.txt.
+    const r = ns.data;
+    const groups: Array<{ title: string; blocks: NoteBlock[] }> = [];
+    for (const b of r.blocks) {
+      if (b.kind === "h1" || b.kind === "h2" || b.kind === "h3") {
+        groups.push({ title: b.text.map((x) => x.t).join("").trim() || "notes", blocks: b.more ? [{ kind: "other", text: [{ t: "More under this heading in Notion" }] }] : [] });
+      } else {
+        if (!groups.length) groups.push({ title: "", blocks: [] });
+        groups[groups.length - 1].blocks.push(b);
+      }
+    }
+    for (const g of groups) { // a dividing line at the edge of a window looks stray
+      while (g.blocks[0]?.kind === "divider") g.blocks.shift();
+      while (g.blocks[g.blocks.length - 1]?.kind === "divider") g.blocks.pop();
+    }
+    const colors = ["mint", "lilac", "peach", "butter", "sky", "pink"];
+    const errNote = ns.status === "error" ? `<div class="note">${esc(errText(ns.err, "Notion"))} Showing the last copy.</div>` : "";
+    notesW = groups.length
+      ? groups.map((g, i) => win(g.title ? fileName(g.title) : "notes.txt", colors[i % colors.length],
+          (g.title ? `<div class="mid">${esc(g.title)}</div>` : "") +
+          '<div class="notes">' + (g.blocks.length ? notesHtml(g.blocks) : '<div class="soft">Nothing under this heading yet.</div>') + "</div>" +
+          (i === 0 ? errNote : ""), true)).join("")
+      : win("notes.txt", "mint", '<div class="soft">No notes on this page yet.</div>' + errNote, true);
+    notesW = '<div class="meta wide">notes are read only here · edit them in Notion</div>' + notesW +
+      (r.truncated ? '<div class="note wide">This page is long, so only the first part shows here. The rest is in Notion.</div>' : "");
+  }
   return back + head + taskW + notesW;
 }
 
