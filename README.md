@@ -7,6 +7,7 @@ A personal life-planner app: a retro pastel desktop of pop-up windows that reads
 - Phase 1 (done): the look, the five tabs, and clearly marked sample content.
 - Phase 2 (done): reads Notion live. Without a token, it shows sample content.
 - Phase 3 (done): taps save to Notion. That covers marking a task done (and undo, which restores its earlier status), Top 3, adding a task, and logging sleep. Each save is sent once and never retried on its own. If the result is unknown, the page says "Notion did not confirm. Refresh to check before trying again."
+- Phase 4 (done): reads today's Google Calendar (read only) for work hours, payday and day-off tags, and appointments.
 - Phase 5 (done): runs on Cloudflare behind an email login, and installs on your phone's home screen.
 
 ## Connect Notion (one time)
@@ -47,6 +48,20 @@ Before signing up, check https://www.cloudflare.com/plans/developer-platform/ an
    - On Android in Chrome: tap the menu, then "Add to Home screen" or "Install app".
 
 Every push to `main` deploys a new version automatically, through the GitHub Action.
+
+## Connect Google Calendar (one time, read only)
+
+1. At https://console.cloud.google.com, make a project called "Home Window" and enable the Google Calendar API.
+2. Open "Google Auth Platform" (or "OAuth consent screen") and tap Get started. Use app name "Home Window", your email for support and contact, and audience "External".
+3. Under Audience, tap **Publish app** so it's "In production". This keeps the calendar connected; in "Testing", Google disconnects it every 7 days. Google will call the app unverified. That's fine for an app only you use.
+4. Under Clients, create an OAuth client of type "Web application", with this authorized redirect URI:
+   `https://home-window.ellaktran.workers.dev/api/google/callback`
+   Copy the Client ID and Client secret.
+5. In Cloudflare, under the worker's Variables and Secrets, add `GOOGLE_CLIENT_ID` (text) and `GOOGLE_CLIENT_SECRET` (secret), then deploy.
+6. Open the app. In today.exe, tap **connect calendar** and approve. If Google warns that the app isn't verified, choose Advanced, then continue.
+7. Copy the code it shows and add it in Cloudflare as a secret named `GOOGLE_REFRESH_TOKEN`, then deploy.
+
+If today.exe ever says the calendar needs connecting again, repeat steps 6 and 7.
 
 ## Run it on your computer
 

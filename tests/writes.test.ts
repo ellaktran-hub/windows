@@ -80,7 +80,7 @@ test("writes never retry, and unknown results say unconfirmed", async () => {
 
 /* ---------- routes ---------- */
 function appWith(n: Partial<NotionReader> | null) {
-  return createApp({ notion: () => n as NotionReader | null, demo: false });
+  return createApp({ notion: () => n as NotionReader | null, demo: false, google: () => ({ clientId: "", clientSecret: "", refreshToken: "" }) });
 }
 const post = (app: ReturnType<typeof appWith>, path: string, body: unknown, headers: Record<string, string> = {}) =>
   app.request("http://hw.test" + path, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });

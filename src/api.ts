@@ -53,6 +53,7 @@ export function errText(e: unknown, server: string): string {
   if (c === "offline") return "Could not reach the app. Check your connection, then tap try again.";
   if (c === "timeout") return server + " is taking a long time. Tap try again in a moment.";
   if (c === "blocked") return "The app refused that request to keep things safe. Reload the page, then try again.";
+  if (c === "google_reconnect") return "Google Calendar needs to be connected again. The steps are in the README, under the calendar section.";
   if (c === "unconfirmed") return "Notion did not confirm. Refresh to check before trying again.";
   if (c === "not_a_task") return "That task was not found in your Tasks list. Nothing was changed.";
   if (c === "invalid") return "Something in that did not look right. Nothing was saved.";

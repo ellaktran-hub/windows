@@ -132,7 +132,8 @@ function hello(): string {
 function todayView(): string {
   const t = todayStr(), tasks = S.tasks.data || [];
   const cal = win("today.exe", "sky", sect(S.cal, (c) => {
-    if (!c.connected) return '<div class="meta">Work</div><div class="soft">The calendar is not connected yet.</div>';
+    if (!c.connected) return '<div class="meta">Work</div><div class="soft">The calendar is not connected yet.</div>' +
+      (c.canConnect ? '<div><a class="btn" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : "");
     let h = '<div class="meta">Work</div>';
     if (c.work) h += `<div class="big">${esc(c.work)}</div>`;
     else if (c.noWork.length) h += '<div class="big">No work today</div>';

@@ -6,6 +6,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { createApp } from "./app.js";
 import { NotionReader, NOTION_BASE } from "./notion.js";
+import { googleConfigFrom } from "./google.js";
 
 // Load .env if present (Node 20.12+). Values never get logged.
 try { process.loadEnvFile(".env"); } catch { /* no .env yet */ }
@@ -22,6 +23,7 @@ const app = createApp({
   notion: () => reader,
   demo: !PROD || process.env.DEMO_MODES === "1",
   extraOrigins: PROD ? [] : ["http://127.0.0.1:5173"],
+  google: () => googleConfigFrom(process.env),
 });
 
 if (PROD) {

@@ -52,7 +52,7 @@ export interface Appointment {
 }
 
 export type Calendar =
-  | { connected: false }
+  | { connected: false; canConnect?: boolean }
   | { connected: true; work: string | null; noWork: string[]; tags: string[]; appts: Appointment[]; failed: number };
 
 export interface ListResponse<T> {

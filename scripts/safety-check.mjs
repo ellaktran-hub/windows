@@ -33,6 +33,14 @@ for (const f of files("dist")) {
   if (/NOTION_TOKEN|GOOGLE_CLIENT_SECRET/.test(text)) problems.push(`${f}: mentions a secret setting`);
 }
 
+// Google Calendar stays read only: read-only scope, and only token requests use POST.
+if (existsSync("server/google.ts")) {
+  const g = readFileSync("server/google.ts", "utf8");
+  if (/auth\/calendar(?!\.readonly)/.test(g)) problems.push("server/google.ts: asks for more than read-only calendar access");
+  if (/["'](PATCH|PUT|DELETE)["']/.test(g)) problems.push("server/google.ts: has a calendar write method");
+  if ((g.match(/method:\s*"POST"/g) || []).length > 2) problems.push("server/google.ts: has an unexpected POST");
+}
+
 // Secrets belong in the Cloudflare dashboard, never in the settings file.
 if (existsSync("wrangler.jsonc") && /NOTION_TOKEN"?\s*:|ntn_/.test(readFileSync("wrangler.jsonc", "utf8"))) problems.push("wrangler.jsonc: holds the Notion token");
 if (existsSync("wrangler.jsonc") && !/"run_worker_first"\s*:\s*true/.test(readFileSync("wrangler.jsonc", "utf8"))) problems.push("wrangler.jsonc: the login check must run before the page is served");

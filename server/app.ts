@@ -12,6 +12,8 @@ import { secureHeaders } from "hono/secure-headers";
 import type { CalendarResponse, ListResponse } from "../shared/types.js";
 import { NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
 import { sampleData } from "./sample.js";
+import { authUrl, exchangeCode, GoogleFail, readToday, type GoogleConfig } from "./google.js";
+import { todayStr } from "../shared/dates.js";
 
 export interface AppOptions<E extends object> {
   /** The Notion reader for this request, or null to show sample content. */
@@ -20,6 +22,8 @@ export interface AppOptions<E extends object> {
   demo: boolean;
   /** Extra page addresses allowed to send changes (the local Vite page in development). */
   extraOrigins?: string[];
+  /** Google Calendar settings for this request (any may be empty). */
+  google: (c: Context<{ Bindings: E }>) => GoogleConfig;
 }
 
 type Key = "tasks" | "projects" | "bills" | "sleep";
@@ -162,9 +166,55 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
   app.get("/api/calendar", async (c) => {
     const d = await demo(c);
     if (d instanceof Response) return d;
-    const body: CalendarResponse = { source: opts.notion(c) ? "live" : "sample", calendar: { connected: false } };
-    return c.json(body);
+    const g = opts.google(c);
+    const source = opts.notion(c) ? "live" : "sample";
+    if (!g.clientId || !g.clientSecret) return c.json({ source, calendar: { connected: false } } satisfies CalendarResponse);
+    if (!g.refreshToken) return c.json({ source, calendar: { connected: false, canConnect: true } } satisfies CalendarResponse);
+    try {
+      const calendar = await readToday(g, todayStr());
+      return c.json({ source: "live", calendar } satisfies CalendarResponse);
+    } catch (e) {
+      const code = e instanceof GoogleFail ? e.code : "upstream_error";
+      console.warn(`google read failed: ${code}${e instanceof GoogleFail && e.status ? " (" + e.status + ")" : ""}`);
+      return c.json({ error: { code, message: "Calendar read failed" } }, code === "google_reconnect" ? 401 : code === "rate_limited" ? 429 : 502);
+    }
   });
+
+  /* ---------- one-time Google connect (read only) ---------- */
+  const page = (title: string, body: string) =>
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>Home Window</title><link rel="stylesheet" href="/plain.css"></head><body><div class="w"><div class="b">${title}</div><div class="c">${body}</div></div><script src="/copy.js"></script></body></html>`;
+  const callbackUrl = (c: Context) => new URL(c.req.url).origin + "/api/google/callback";
+
+  app.get("/api/google/connect", (c) => {
+    const g = opts.google(c);
+    if (!g.clientId || !g.clientSecret) return c.html(page("calendar.txt", "<p>Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET first. The steps are in the README.</p>"), 400);
+    const state = crypto.randomUUID();
+    const secure = new URL(c.req.url).protocol === "https:" ? "; Secure" : "";
+    c.header("Set-Cookie", `hw_gstate=${state}; Path=/api/google; HttpOnly; SameSite=Lax; Max-Age=600${secure}`);
+    return c.redirect(authUrl(g.clientId, callbackUrl(c), state), 302);
+  });
+
+  app.get("/api/google/callback", async (c) => {
+    const g = opts.google(c);
+    const cookie = (c.req.header("cookie") || "").split(/;\s*/).find((x) => x.startsWith("hw_gstate="))?.slice(10) || "";
+    c.header("Set-Cookie", "hw_gstate=; Path=/api/google; HttpOnly; SameSite=Lax; Max-Age=0");
+    if (c.req.query("error")) return c.html(page("calendar.txt", "<p>Google did not connect, so nothing changed. You can try again from the README steps.</p>"), 400);
+    const code = c.req.query("code") || "";
+    if (!code || !cookie || c.req.query("state") !== cookie) return c.html(page("calendar.txt", "<p>That link was out of date, so nothing changed. Please start the connect step again.</p>"), 400);
+    try {
+      const token = await exchangeCode(g, code, callbackUrl(c));
+      return c.html(page("calendar_connected.txt",
+        "<p><b>Almost done.</b> Copy this code and paste it into Cloudflare as a <b>Secret</b> named <code>GOOGLE_REFRESH_TOKEN</code>.</p>" +
+        "<p>Paste it only into Cloudflare. Don't send it to anyone, including Claude.</p>" +
+        `<textarea id="tok" readonly rows="4">${token.replace(/[<>&"]/g, "")}</textarea>` +
+        '<p><button id="copy" type="button">copy</button> <span id="ok"></span></p>' +
+        "<p>This page is not saved anywhere. Once it's pasted, you can close it.</p>"));
+    } catch (e) {
+      console.warn(`google connect failed: ${e instanceof GoogleFail ? e.code : "error"}`);
+      return c.html(page("calendar.txt", "<p>Google did not finish connecting, so nothing changed. Please try the connect step again in a minute.</p>"), 400);
+    }
+  });
+
   app.all("/api/*", (c) => c.json({ error: { code: "not_found", message: "No such route" } }, 404));
 
   app.onError((err, c) => {

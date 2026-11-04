@@ -6,6 +6,7 @@
 import { createApp } from "./app.js";
 import { configFrom, verifyAccess } from "./access.js";
 import { NotionReader } from "./notion.js";
+import { googleConfigFrom } from "./google.js";
 
 interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
@@ -13,6 +14,9 @@ interface Env {
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
   ALLOWED_EMAIL?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
 }
 
 const LOCKED = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>Home Window</title>
@@ -33,6 +37,7 @@ const app = createApp<Env>({
     return t ? new NotionReader(t) : null;
   },
   demo: false,
+  google: (c) => googleConfigFrom(c.env as unknown as Record<string, unknown>),
 });
 
 // Anything that isn't an /api route is the page and its files.
