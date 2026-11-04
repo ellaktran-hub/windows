@@ -626,11 +626,7 @@ app.addEventListener("submit", (e) => {
   if (f === "task") void addTask(); else if (f === "sleep") void saveSleep();
 });
 
-let enterTimer: ReturnType<typeof setTimeout> | undefined;
 function route() {
-  app.classList.add("enter");
-  clearTimeout(enterTimer);
-  enterTimer = setTimeout(() => app.classList.remove("enter"), 700);
   const h = location.hash.replace("#", "");
   const pm = h.match(/^project\/([0-9a-z]{1,64})$/i);
   if (pm) {

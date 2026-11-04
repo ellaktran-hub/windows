@@ -159,13 +159,6 @@ details summary { cursor: pointer; font-weight: 700; min-height: 28px; }
 @media (prefers-reduced-motion: no-preference) {
   .heart { animation: bob 2.4s steps(2, end) infinite; }
   @keyframes bob { 50% { transform: translateY(-4px); } }
-  /* Windows pop in when a tab opens, a little one after another. */
-  .enter .win, .enter .bubble { animation: pop 0.28s steps(4, end) both; }
-  .enter > :nth-child(4) { animation-delay: 0.04s; } .enter > :nth-child(5) { animation-delay: 0.08s; }
-  .enter > :nth-child(6) { animation-delay: 0.12s; } .enter > :nth-child(7) { animation-delay: 0.16s; }
-  .enter > :nth-child(8) { animation-delay: 0.2s; } .enter > :nth-child(9) { animation-delay: 0.24s; }
-  .enter > :nth-child(n+10) { animation-delay: 0.28s; }
-  @keyframes pop { from { opacity: 0; transform: translate(0, 10px) scale(0.97); } to { opacity: 1; transform: none; } }
   .day, .box, .pin, .btn, .tab { transition: transform 0.08s steps(2, end); }
   .barbtn[disabled] .spin { animation: spin 0.8s steps(8, end) infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
