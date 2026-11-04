@@ -26,11 +26,11 @@ The app runs on Cloudflare Workers. Cloudflare Access sits in front of it with a
 Before signing up, check https://www.cloudflare.com/plans/developer-platform/ and the Zero Trust plans page. If any step asks for a card or a payment, stop there and decide first.
 
 1. **Make a Cloudflare account** at https://dash.cloudflare.com/sign-up.
-2. **Deploy from GitHub.** In the dashboard, go to Workers & Pages, then Create, then "Import a repository". Connect GitHub, choose `ellaktran-hub/windows`, and use:
-   - Build command: `npm run build`
-   - Deploy command: `npx wrangler deploy`
+2. **Let GitHub deploy it.** This repo has a GitHub Action (`.github/workflows/deploy.yml`) that tests, builds, and deploys on every push to `main`. It needs two secrets in GitHub, under Settings, then Secrets and variables, then Actions:
+   - `CLOUDFLARE_API_TOKEN`: in Cloudflare, go to My Profile, then API Tokens, then Create Token, and use the "Edit Cloudflare Workers" template.
+   - `CLOUDFLARE_ACCOUNT_ID`: shown on the Cloudflare dashboard home or the Workers & Pages page, as "Account ID".
 
-   When it finishes, it gives you an address like `home-window.<something>.workers.dev`. Opening it should show "This page is locked." That is expected.
+   Then, on GitHub, open Actions, choose "Deploy to Cloudflare", and tap "Run workflow". When it finishes, the worker's address ends in `.workers.dev`. Opening it should show "This page is locked." That is expected.
 3. **Turn on the login.** Open the worker, go to Settings, then Domains & Routes. Next to the `workers.dev` address, turn on Cloudflare Access. Then open "Manage Cloudflare Access" and set the policy to allow only your email. If it asks you to create a Zero Trust team, pick a team name and the Free plan. Note the team name, because your team domain is `<team name>.cloudflareaccess.com`.
 4. **Copy the AUD tag.** In Zero Trust, go to Access, then Applications, and open the app for this worker. Copy the "Application Audience (AUD) Tag".
 5. **Add the settings.** Back on the worker, go to Settings, then Variables and Secrets, and add:
@@ -44,7 +44,7 @@ Before signing up, check https://www.cloudflare.com/plans/developer-platform/ an
    - On an iPhone in Safari: tap Share, then "Add to Home Screen".
    - On Android in Chrome: tap the menu, then "Add to Home screen" or "Install app".
 
-Every push to `main` deploys a new version automatically.
+Every push to `main` deploys a new version automatically, through the GitHub Action.
 
 ## Run it on your computer
 
