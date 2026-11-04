@@ -259,21 +259,36 @@ function billsView(): string {
   }), true);
 }
 
+const STATUS_ORDER = ["Urgent", "Active", "Ongoing", "Later"];
+const STATUS_COLOR: Record<string, string> = { Urgent: "peach", Active: "butter", Ongoing: "mint", Later: "lilac" };
+/** "Move out!" -> "move_out.txt", like the other window names. */
+function fileName(name: string): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 28);
+  return (slug || "project") + ".txt";
+}
+
+// One window per project, most urgent first, then by deadline, then by name.
 function projectsView(): string {
   if (!S.projects.data) return win("projects.txt", "butter", sect(S.projects, () => ""), true);
-  const rows = S.projects.data, open = (S.tasks.data || []).filter(R.isOpen);
-  const defs: Array<[string, string, string]> = [["Urgent", "urgent.txt", "peach"], ["Active", "active.txt", "butter"], ["Ongoing", "ongoing.txt", "mint"], ["Later", "later.txt", "lilac"]];
+  const open = (S.tasks.data || []).filter(R.isOpen);
+  const rank = (p: Project) => { const i = STATUS_ORDER.indexOf(p.status); return i < 0 ? STATUS_ORDER.length : i; };
+  const rows = S.projects.data.slice().sort((a, b) =>
+    rank(a) - rank(b) || (a.deadline || "9999").localeCompare(b.deadline || "9999") || a.name.localeCompare(b.name));
   const note = S.projects.status === "error" ? `<div class="note wide">${esc(errText(S.projects.err, "Notion"))} Showing the last copy.</div>` : "";
-  return note + (defs.map(([status, name, color]) => {
-    const ps = rows.filter((p) => p.status === status);
-    if (!ps.length) return "";
-    return win(name, color, ps.map((p) => {
-      const n = open.filter((x) => x.projectIds.includes(p.id)).length;
-      const tags = (p.focus ? '<span class="tag butter">focus</span>' : "") + (p.deadline ? `<span class="tag peach">${esc("deadline " + lbl(p.deadline))}</span>` : "") + (n ? `<span class="tag">${n} open</span>` : "");
-      return `<div class="stack tight"><div class="row"><b><a class="plain" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${esc(p.name)}</a></b>${tags}</div>` +
-        (p.next ? `<div><span class="meta">next step</span><br>${esc(p.next)}</div>` : '<div class="meta">no next step written</div>') + "</div>";
-    }).join("<hr>"), true);
-  }).join("") || win("projects.txt", "butter", '<div class="soft">No projects yet.</div>', true));
+  if (!rows.length) return note + win("projects.txt", "butter", '<div class="soft">No projects yet.</div>', true);
+  return note + rows.map((p) => {
+    const n = open.filter((x) => x.projectIds.includes(p.id)).length;
+    const color = STATUS_COLOR[p.status] || "sky";
+    const tags = (p.status ? `<span class="tag ${color}">${esc(p.status.toLowerCase())}</span>` : "") +
+      (p.focus ? '<span class="tag butter">focus</span>' : "") +
+      (p.deadline ? `<span class="tag">${esc("deadline " + lbl(p.deadline))}</span>` : "") +
+      (n ? `<span class="tag">${n} open</span>` : "");
+    const body = `<div class="mid">${esc(p.name)}</div>` +
+      (tags ? `<div class="row">${tags}</div>` : "") +
+      (p.next ? `<div><span class="meta">next step</span><br>${esc(p.next)}</div>` : '<div class="meta">no next step written</div>') +
+      `<div><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
+    return win(fileName(p.name), color, body);
+  }).join("");
 }
 
 function sleepView(): string {
