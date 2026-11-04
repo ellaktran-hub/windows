@@ -4,7 +4,20 @@ A personal life-planner app: a retro pastel desktop of pop-up windows that reads
 
 ## Status
 
-Phase 1: the look, the five tabs, and sample content, which is clearly marked as sample. Nothing connects to Notion or Google yet. Taps change only what's on screen.
+- Phase 1 (done): the look, the five tabs, and clearly marked sample content.
+- Phase 2 (done): reads Notion live when a token is in `.env`. Without one, it shows sample content. Taps don't save anything yet. Saving comes in phase 3.
+
+## Connect Notion (one time)
+
+1. Go to https://www.notion.so/profile/integrations and choose "New integration".
+2. Name it "Home Window", pick your workspace, and choose "Internal".
+3. Under Capabilities, turn on "Read content" only for now. Phase 3 will ask you to add "Update content" and "Insert content".
+4. Copy the "Internal Integration Secret". It starts with `ntn_`.
+5. In this folder, copy `.env.example` to a new file named `.env`. Paste the secret after `NOTION_TOKEN=`, with no spaces or quotes.
+6. Share each of the four databases (Tasks, Projects, Bills, Sleep Log) with the integration. Open the database, tap the `...` menu at the top right, choose "Connections", and add "Home Window".
+7. Restart the app (`Ctrl+C`, then `npm run dev` again). The terminal should say "Notion: reading live data."
+
+If a window says a database is not shared, repeat step 6 for that database. If it says the token was not accepted, check step 5.
 
 ## Run it on your computer
 

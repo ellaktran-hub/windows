@@ -275,22 +275,28 @@ function toast(msg: string, bad = false) {
 }
 
 /* ---------- actions (phase 1: on screen only) ---------- */
-// Phase 3 replaces these with calls to the server. Nothing here runs on load;
+// Phase 3 replaces these with calls to the server. With live data they do nothing yet. Nothing here runs on load;
 // each one starts from a tap.
 const SAMPLE_NOTE = "Sample only. Nothing was saved to Notion.";
+const LIVE_NOTE = "Saving to Notion comes in the next step. Nothing was changed.";
+// While reads are live but writes are not built yet, taps change nothing.
+const liveNoWrite = () => { if (S.tasks.source === "live" || S.sleep.source === "live") { toast(LIVE_NOTE); return true; } return false; };
 const find = (id: string) => (S.tasks.data || []).find((x) => x.id === id);
 
 function toggleDone(id: string) {
+  if (liveNoWrite()) return;
   const x = find(id); if (!x) return;
   if (x.status === "Done") { x.status = S.prevStatus[id] || "Not started"; delete S.prevStatus[id]; }
   else { S.prevStatus[id] = x.status; x.status = "Done"; }
   render(); toast(SAMPLE_NOTE);
 }
 function togglePin(id: string) {
+  if (liveNoWrite()) return;
   const x = find(id); if (!x) return;
   x.top3 = !x.top3; render(); toast(SAMPLE_NOTE);
 }
 function addTask() {
+  if (liveNoWrite()) return;
   const d = S.draft, title = d.task.trim();
   if (!title) { toast("Type a task first.", true); return; }
   if (!S.tasks.data) { toast("Tasks are not loaded yet. Tap refresh, then try again.", true); return; }
@@ -299,6 +305,7 @@ function addTask() {
   render(); toast(SAMPLE_NOTE);
 }
 function saveSleep() {
+  if (liveNoWrite()) return;
   const d = S.draft, night = d.night.trim(), hrs = parseFloat(d.hours);
   if (!night || isNaN(hrs) || hrs < 0 || hrs > 24) { toast("Add the night and the hours slept (0 to 24).", true); return; }
   if (!S.sleep.data) { toast("Sleep is not loaded yet. Tap refresh, then try again.", true); return; }

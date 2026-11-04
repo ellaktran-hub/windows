@@ -1,6 +1,7 @@
 // Small server that sits between the browser and Notion / Google.
-// Phase 1: it serves sample content only. Later phases add the real
-// readers here, so tokens stay on this side and never reach the browser.
+// With NOTION_TOKEN set in .env it reads Notion live; without it, it serves
+// clearly marked sample content. Tokens stay on this side and never reach
+// the browser.
 //
 // Safety rules kept in this file:
 // - It listens on 127.0.0.1 only, so nothing else on the network can reach it yet.
@@ -12,6 +13,12 @@ import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import type { CalendarResponse, ListResponse } from "../shared/types.js";
 import { sampleData } from "./sample.js";
+import { NotionFail, NotionReader } from "./notion.js";
+
+// Load .env if present (Node 20.12+). Values never get logged.
+try { process.loadEnvFile(".env"); } catch { /* no .env yet */ }
+const NOTION_TOKEN = (process.env.NOTION_TOKEN || "").trim();
+const notion = NOTION_TOKEN ? new NotionReader(NOTION_TOKEN) : null;
 
 const PROD = process.env.NODE_ENV === "production";
 const PORT = Number(process.env.PORT || 8787);
@@ -49,13 +56,25 @@ async function demo(c: Context): Promise<Response | "empty" | null> {
   return null;
 }
 
-function list<K extends "tasks" | "projects" | "bills" | "sleep">(key: K) {
+type Key = "tasks" | "projects" | "bills" | "sleep";
+
+function list(key: Key) {
   return async (c: Context) => {
     const d = await demo(c);
     if (d instanceof Response) return d;
-    const items: unknown[] = d === "empty" ? [] : sampleData()[key];
-    const body: ListResponse<unknown> = { source: "sample", items };
-    return c.json(body);
+    if (d === "empty") return c.json({ source: notion ? "live" : "sample", items: [] } satisfies ListResponse<unknown>);
+    if (!notion) return c.json({ source: "sample", items: sampleData()[key] as unknown[] } satisfies ListResponse<unknown>);
+    try {
+      const items: unknown[] = await notion[key]();
+      return c.json({ source: "live", items } satisfies ListResponse<unknown>);
+    } catch (e) {
+      const code = e instanceof NotionFail ? e.code : "server_error";
+      const status = e instanceof NotionFail ? e.status : 0;
+      // Only the route, status, and Notion's short error code. Never the token or any row content.
+      console.warn(`notion read ${key} failed: ${code}${status ? " (" + status + ")" : ""}`);
+      const http = code === "unauthorized" ? 401 : code === "not_shared" ? 403 : code === "rate_limited" ? 429 : 502;
+      return c.json({ error: { code, message: "Notion read failed" } }, http);
+    }
   };
 }
 
@@ -67,7 +86,7 @@ app.get("/api/sleep", list("sleep"));
 app.get("/api/calendar", async (c) => {
   const d = await demo(c);
   if (d instanceof Response) return d;
-  const body: CalendarResponse = { source: "sample", calendar: { connected: false } };
+  const body: CalendarResponse = { source: notion ? "live" : "sample", calendar: { connected: false } };
   return c.json(body);
 });
 app.all("/api/*", (c) => c.json({ error: { code: "not_found", message: "No such route" } }, 404));
@@ -84,4 +103,5 @@ app.onError((err, c) => {
 
 serve({ fetch: app.fetch, port: PORT, hostname: HOST }, (info) => {
   console.log(`Home Window server on http://${HOST}:${info.port}${PROD ? "" : " (API only; open the Vite address)"}`);
+  console.log(notion ? "Notion: reading live data." : "Notion: no token in .env, so showing sample content.");
 });

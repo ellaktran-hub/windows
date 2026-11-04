@@ -37,8 +37,9 @@ export function errText(e: unknown, server: string): string {
   if (c === "offline") return "Could not reach the app. Check your connection, then tap try again.";
   if (c === "timeout") return server + " is taking a long time. Tap try again in a moment.";
   if (c === "not_connected") return server + " is not connected yet.";
-  if (c === "unauthorized") return server + " needs to be reconnected. The steps are in the README.";
-  if (c === "not_shared") return "A " + server + " database is not shared with the app yet. The steps are in the README.";
+  if (c === "unauthorized") return server + " did not accept the token. Check the Notion token in the .env file, restart the app, then tap try again.";
+  if (c === "not_shared") return "A " + server + " database is not shared with the app yet. Share it with the integration (steps in the README), then tap try again.";
+  if (c === "bad_request") return server + " did not accept the request. A property name may have changed in Notion.";
   if (c === "rate_limited") return server + " asked us to slow down. Try again in a minute.";
   if (c === "upstream_error" || c === "server_error") return server + " did not answer. Try again in a moment.";
   if (c === "bad_shape") return server + " sent back something unexpected. Try again in a moment.";
