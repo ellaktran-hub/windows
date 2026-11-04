@@ -9,16 +9,26 @@ export class ApiFail extends Error {
 const TIMEOUT_MS = 20000;
 const demo = new URLSearchParams(location.search).get("demo");
 
-export async function getJson<T>(path: string): Promise<T> {
+async function request<T>(method: "GET" | "POST", path: string, data?: unknown): Promise<T> {
+  const write = method !== "GET";
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   const url = demo ? path + "?demo=" + encodeURIComponent(demo) : path;
   let res: Response;
   try {
     // redirect: "manual" so an expired login shows up as a redirect, not a network error.
-    res = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" }, cache: "no-store", redirect: "manual" });
-  } catch (e) {
-    throw new ApiFail(ctl.signal.aborted ? "timeout" : "offline");
+    res = await fetch(url, {
+      method,
+      signal: ctl.signal,
+      headers: write ? { Accept: "application/json", "Content-Type": "application/json" } : { Accept: "application/json" },
+      body: write ? JSON.stringify(data ?? {}) : undefined,
+      cache: "no-store",
+      redirect: "manual",
+      credentials: "same-origin",
+    });
+  } catch {
+    // For a write we can't know whether Notion got it, so we say so instead of guessing.
+    throw new ApiFail(write ? "unconfirmed" : ctl.signal.aborted ? "timeout" : "offline");
   } finally {
     clearTimeout(timer);
   }
@@ -26,18 +36,26 @@ export async function getJson<T>(path: string): Promise<T> {
   let body: unknown = null;
   try { body = await res.json(); } catch { /* handled below */ }
   if (!res.ok) {
-    const code = (body as { error?: { code?: string } } | null)?.error?.code || (res.status === 403 ? "signed_out" : "server_error");
+    const code = (body as { error?: { code?: string } } | null)?.error?.code || (res.status === 403 ? "signed_out" : write ? "unconfirmed" : "server_error");
     throw new ApiFail(code);
   }
-  if (body == null) throw new ApiFail("bad_shape");
+  if (body == null) throw new ApiFail(write ? "unconfirmed" : "bad_shape");
   return body as T;
 }
+
+export const getJson = <T>(path: string) => request<T>("GET", path);
+/** Sends one change. Never retried automatically. */
+export const postJson = <T>(path: string, data: unknown) => request<T>("POST", path, data);
 
 /** Calm, plain words for each kind of failure: what happened, then what to do. */
 export function errText(e: unknown, server: string): string {
   const c = e instanceof ApiFail ? e.code : "unknown";
   if (c === "offline") return "Could not reach the app. Check your connection, then tap try again.";
   if (c === "timeout") return server + " is taking a long time. Tap try again in a moment.";
+  if (c === "blocked") return "The app refused that request to keep things safe. Reload the page, then try again.";
+  if (c === "unconfirmed") return "Notion did not confirm. Refresh to check before trying again.";
+  if (c === "not_a_task") return "That task was not found in your Tasks list. Nothing was changed.";
+  if (c === "invalid") return "Something in that did not look right. Nothing was saved.";
   if (c === "signed_out") return "Your sign-in ended. Reload the page to sign in again.";
   if (c === "not_connected") return server + " is not connected yet.";
   if (c === "unauthorized") return server + " did not accept the token. Check the Notion token in the .env file, restart the app, then tap try again.";

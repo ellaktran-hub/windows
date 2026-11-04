@@ -5,7 +5,7 @@
 import "./styles.css";
 import { addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
 import type { Bill, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
-import { errText, getJson } from "./api.js";
+import { errText, getJson, postJson } from "./api.js";
 import * as R from "./rules.js";
 
 type Status = "loading" | "ok" | "error";
@@ -26,6 +26,8 @@ const S = {
   refreshing: false,
   confirmDup: false,
   prevStatus: {} as Record<string, string>, // status a task had before it was marked Done
+  doneKeep: {} as Record<string, Task>, // tasks marked done here, kept visible so they can be undone
+  busy: {} as Record<string, boolean>, // a change is on its way for this task or form
   draft: { task: "", block: "", due: "", night: "", bed: "", wake: "", hours: "", hoursTouched: false },
 };
 
@@ -65,7 +67,7 @@ async function refreshAll() {
   S.refreshing = true;
   render();
   await Promise.all([
-    load(S.tasks, list<Task>("/api/tasks")),
+    load(S.tasks, list<Task>("/api/tasks")).then(keepDone),
     load(S.projects, list<Project>("/api/projects")),
     load(S.bills, list<Bill>("/api/bills")),
     load(S.sleep, list<SleepEntry>("/api/sleep")),
@@ -99,9 +101,9 @@ function todo(x: Task): string {
   const pn = x.projectIds.map(projName).find(Boolean); if (pn) bits.push(pn);
   if (x.due) bits.push(x.due < t ? "was due " + lbl(x.due) : x.due === t ? "due today" : "due " + lbl(x.due));
   return `<div class="todo${done ? " done" : ""}">` +
-    `<button class="box" role="checkbox" aria-checked="${done}" aria-label="${done ? "Undo done: " : "Mark done: "}${esc(x.title)}" data-act="toggle" data-id="${esc(x.id)}"></button>` +
+    `<button class="box" role="checkbox" aria-checked="${done}" aria-label="${done ? "Undo done: " : "Mark done: "}${esc(x.title)}" data-act="toggle" data-id="${esc(x.id)}"${S.busy[x.id] ? " disabled" : ""}></button>` +
     `<div><b>${esc(x.title)}</b><div class="meta">${esc(bits.join(" · "))}</div></div>` +
-    `<button class="pin" aria-pressed="${x.top3}" data-act="pin" data-id="${esc(x.id)}">top 3</button></div>`;
+    `<button class="pin" aria-pressed="${x.top3}" data-act="pin" data-id="${esc(x.id)}"${S.busy[x.id] ? " disabled" : ""}>top 3</button></div>`;
 }
 function blocksHtml(h: number | null): string {
   const n = Math.max(0, Math.min(8, Math.round(h || 0)));
@@ -183,7 +185,7 @@ function tasksView(): string {
     `<div class="fields"><label for="newBlock">Time block<select id="newBlock" data-draft="block"><option value="">none</option>` +
     BLOCKS.map((b) => `<option${d.block === b ? " selected" : ""}>${b}</option>`).join("") + "</select></label>" +
     `<label for="newDue">Due<input id="newDue" type="date" data-draft="due" value="${esc(d.due)}"></label></div>` +
-    '<div><button class="btn" type="submit">add to Notion</button></div></form>', true);
+    `<div><button class="btn" type="submit"${S.busy.add ? " disabled" : ""}>${S.busy.add ? "adding" : "add to Notion"}</button></div></form>`, true);
   if (!S.tasks.data) return add + win("tasks.txt", "butter", sect(S.tasks, () => ""), true);
   const open = S.tasks.data.filter((x) => R.isOpen(x) || S.prevStatus[x.id]);
   const b = R.buckets(open, t);
@@ -238,7 +240,7 @@ function sleepView(): string {
     `<label for="slHours">Hours slept<input id="slHours" data-draft="hours" inputmode="decimal" autocomplete="off" value="${esc(d.hours)}"></label></div>` +
     '<div class="meta">Hours fill in from bedtime and wake-up. You can change them.</div>' +
     (dup && S.confirmDup ? `<div class="note">There is already an entry for ${esc(d.night)}. The newest one counts. Tap again to save another.</div>` : "") +
-    `<div><button class="btn" type="submit">${dup && S.confirmDup ? "save another entry" : "save to Notion"}</button></div></form>`);
+    `<div><button class="btn" type="submit"${S.busy.sleep ? " disabled" : ""}>${S.busy.sleep ? "saving" : dup && S.confirmDup ? "save another entry" : "save to Notion"}</button></div></form>`);
   const last = win("last_night.log", "lilac", sect(S.sleep, (r) => nightSummary(R.lastNight(r, t), false)));
   const wk = win("this_week.txt", "mint", sect(S.sleep, (r) => {
     const latest = R.latestPerNight(r);
@@ -274,45 +276,112 @@ function toast(msg: string, bad = false) {
   toastTimer = setTimeout(() => { toastEl.hidden = true; }, 4500);
 }
 
-/* ---------- actions (phase 1: on screen only) ---------- */
-// Phase 3 replaces these with calls to the server. With live data they do nothing yet. Nothing here runs on load;
-// each one starts from a tap.
+/* ---------- actions ---------- */
+// Each of these starts from a tap; nothing writes on load. With sample
+// content they change only the screen. With live data they send one change
+// to the server, never retry on their own, and then re-read from Notion.
 const SAMPLE_NOTE = "Sample only. Nothing was saved to Notion.";
-const LIVE_NOTE = "Saving to Notion comes in the next step. Nothing was changed.";
-// While reads are live but writes are not built yet, taps change nothing.
-const liveNoWrite = () => { if (S.tasks.source === "live" || S.sleep.source === "live") { toast(LIVE_NOTE); return true; } return false; };
 const find = (id: string) => (S.tasks.data || []).find((x) => x.id === id);
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const isLive = (s: Slot<unknown>) => s.source === "live";
+function writeMsg(e: unknown): string {
+  const m = errText(e, "Notion");
+  return /Nothing was|Refresh to check/.test(m) ? m : m + " Nothing was changed.";
+}
 
-function toggleDone(id: string) {
-  if (liveNoWrite()) return;
-  const x = find(id); if (!x) return;
-  if (x.status === "Done") { x.status = S.prevStatus[id] || "Not started"; delete S.prevStatus[id]; }
-  else { S.prevStatus[id] = x.status; x.status = "Done"; }
-  render(); toast(SAMPLE_NOTE);
+async function reloadTasks() {
+  await pause(700); // give Notion a moment so the re-read includes the change
+  await load(S.tasks, list<Task>("/api/tasks"));
+  keepDone();
 }
-function togglePin(id: string) {
-  if (liveNoWrite()) return;
-  const x = find(id); if (!x) return;
-  x.top3 = !x.top3; render(); toast(SAMPLE_NOTE);
+/** Tasks marked done here stay on screen (crossed out) so they can be undone. */
+function keepDone() {
+  if (!S.tasks.data) return;
+  for (const [id, t] of Object.entries(S.doneKeep)) {
+    if (!S.tasks.data.some((x) => x.id === id)) S.tasks.data.push({ ...t, status: "Done" });
+  }
+  render();
 }
-function addTask() {
-  if (liveNoWrite()) return;
+
+async function toggleDone(id: string) {
+  const x = find(id); if (!x || S.busy[id]) return;
+  const wasDone = x.status === "Done";
+  const before = x.status;
+  const next = wasDone ? S.prevStatus[id] || "Not started" : "Done";
+  if (!isLive(S.tasks)) {
+    if (wasDone) { delete S.prevStatus[id]; delete S.doneKeep[id]; } else { S.prevStatus[id] = before; }
+    x.status = next; render(); toast(SAMPLE_NOTE); return;
+  }
+  S.busy[id] = true; x.status = next; render();
+  try {
+    await postJson("/api/tasks/" + encodeURIComponent(id) + "/status", { status: next });
+    if (wasDone) { delete S.prevStatus[id]; delete S.doneKeep[id]; }
+    else { S.prevStatus[id] = before; S.doneKeep[id] = { ...x }; }
+    toast(wasDone ? "Moved back onto your list." : "Marked done in Notion.");
+    S.busy[id] = false;
+    await reloadTasks();
+  } catch (e) {
+    x.status = before; S.busy[id] = false; render(); toast(writeMsg(e), true);
+  }
+}
+
+async function togglePin(id: string) {
+  const x = find(id); if (!x || S.busy[id]) return;
+  const next = !x.top3;
+  if (!isLive(S.tasks)) { x.top3 = next; render(); toast(SAMPLE_NOTE); return; }
+  S.busy[id] = true; x.top3 = next; render();
+  try {
+    await postJson("/api/tasks/" + encodeURIComponent(id) + "/top3", { top3: next });
+    if (S.doneKeep[id]) S.doneKeep[id].top3 = next;
+    toast(next ? "Added to your top 3." : "Removed from your top 3.");
+    S.busy[id] = false;
+    await reloadTasks();
+  } catch (e) {
+    x.top3 = !next; S.busy[id] = false; render(); toast(writeMsg(e), true);
+  }
+}
+
+async function addTask() {
   const d = S.draft, title = d.task.trim();
+  if (S.busy.add) return;
   if (!title) { toast("Type a task first.", true); return; }
   if (!S.tasks.data) { toast("Tasks are not loaded yet. Tap refresh, then try again.", true); return; }
-  S.tasks.data.push({ id: "local-" + Date.now(), url: "", title, status: "Not started", top3: false, block: d.block, area: "", due: d.due || null, projectIds: [] });
-  d.task = ""; d.block = ""; d.due = "";
-  render(); toast(SAMPLE_NOTE);
+  if (!isLive(S.tasks)) {
+    S.tasks.data.push({ id: "local-" + Date.now(), url: "", title, status: "Not started", top3: false, block: d.block, area: "", due: d.due || null, projectIds: [] });
+    d.task = ""; d.block = ""; d.due = ""; render(); toast(SAMPLE_NOTE); return;
+  }
+  S.busy.add = true; render();
+  try {
+    await postJson("/api/tasks", { title, block: d.block, due: d.due || null });
+    d.task = ""; d.block = ""; d.due = "";
+    S.busy.add = false; toast("Added to Notion.");
+    await reloadTasks();
+  } catch (e) {
+    S.busy.add = false; render(); toast(writeMsg(e).replace("Nothing was changed.", "Nothing was added."), true);
+  }
 }
-function saveSleep() {
-  if (liveNoWrite()) return;
+
+async function saveSleep() {
   const d = S.draft, night = d.night.trim(), hrs = parseFloat(d.hours);
+  if (S.busy.sleep) return;
   if (!night || isNaN(hrs) || hrs < 0 || hrs > 24) { toast("Add the night and the hours slept (0 to 24).", true); return; }
   if (!S.sleep.data) { toast("Sleep is not loaded yet. Tap refresh, then try again.", true); return; }
   if (R.hasNight(S.sleep.data, night) && !S.confirmDup) { S.confirmDup = true; render(); return; }
-  S.sleep.data.push({ id: "local-" + Date.now(), night, bed: d.bed.trim(), wake: d.wake.trim(), hours: hrs, logged: new Date().toISOString() });
-  d.night = ""; d.bed = ""; d.wake = ""; d.hours = ""; d.hoursTouched = false; S.confirmDup = false;
-  render(); toast(SAMPLE_NOTE);
+  const entry = { night, bed: d.bed.trim(), wake: d.wake.trim(), hours: hrs };
+  const clear = () => { d.night = ""; d.bed = ""; d.wake = ""; d.hours = ""; d.hoursTouched = false; S.confirmDup = false; };
+  if (!isLive(S.sleep)) {
+    S.sleep.data.push({ id: "local-" + Date.now(), ...entry, logged: new Date().toISOString() });
+    clear(); render(); toast(SAMPLE_NOTE); return;
+  }
+  S.busy.sleep = true; render();
+  try {
+    await postJson("/api/sleep", entry);
+    clear(); S.busy.sleep = false; toast("Sleep saved to Notion.");
+    await pause(700);
+    await load(S.sleep, list<SleepEntry>("/api/sleep"));
+  } catch (e) {
+    S.busy.sleep = false; render(); toast(writeMsg(e).replace("Nothing was changed.", "Nothing was saved."), true);
+  }
 }
 
 /* ---------- events ---------- */
@@ -320,8 +389,8 @@ app.addEventListener("click", (e) => {
   const b = (e.target as HTMLElement).closest<HTMLElement>("[data-act]"); if (!b) return;
   const a = b.dataset.act, id = b.dataset.id || "";
   if (a === "refresh") void refreshAll();
-  else if (a === "toggle") toggleDone(id);
-  else if (a === "pin") togglePin(id);
+  else if (a === "toggle") void toggleDone(id);
+  else if (a === "pin") void togglePin(id);
 });
 app.addEventListener("input", (e) => {
   const t = e.target as HTMLInputElement, k = t.dataset?.draft as keyof typeof S.draft | undefined;
@@ -342,7 +411,7 @@ app.addEventListener("change", (e) => {
 app.addEventListener("submit", (e) => {
   e.preventDefault();
   const f = (e.target as HTMLFormElement).dataset.form;
-  if (f === "task") addTask(); else if (f === "sleep") saveSleep();
+  if (f === "task") void addTask(); else if (f === "sleep") void saveSleep();
 });
 
 function route() {

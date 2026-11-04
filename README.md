@@ -5,13 +5,15 @@ A personal life-planner app: a retro pastel desktop of pop-up windows that reads
 ## Status
 
 - Phase 1 (done): the look, the five tabs, and clearly marked sample content.
-- Phase 2 (done): reads Notion live when a token is in `.env`. Without one, it shows sample content. Taps don't save anything yet. Saving comes in phase 3.
+- Phase 2 (done): reads Notion live. Without a token, it shows sample content.
+- Phase 3 (done): taps save to Notion. That covers marking a task done (and undo, which restores its earlier status), Top 3, adding a task, and logging sleep. Each save is sent once and never retried on its own. If the result is unknown, the page says "Notion did not confirm. Refresh to check before trying again."
+- Phase 5 (done): runs on Cloudflare behind an email login, and installs on your phone's home screen.
 
 ## Connect Notion (one time)
 
 1. Go to https://www.notion.so/profile/integrations and choose "New integration".
 2. Name it "Home Window", pick your workspace, and choose "Internal".
-3. Under Capabilities, turn on "Read content" only for now. Phase 3 will ask you to add "Update content" and "Insert content".
+3. Under Capabilities, turn on "Read content", "Update content", and "Insert content". Nothing else is needed. The app has no way to delete anything.
 4. Copy the "Internal Integration Secret". It starts with `ntn_`.
 5. In this folder, copy `.env.example` to a new file named `.env`. Paste the secret after `NOTION_TOKEN=`, with no spaces or quotes.
 6. Share each of the four databases (Tasks, Projects, Bills, Sleep Log) with the integration. Open the database, tap the `...` menu at the top right, choose "Connections", and add "Home Window".

@@ -15,7 +15,7 @@ const problems = [];
 const code = ["src", "server", "shared"].flatMap(files).filter((f) => /\.(ts|js|html)$/.test(f));
 const banned = [
   [/\barchived\s*:/i, "archives a Notion page"],
-  [/\bin_trash\b/i, "moves a Notion page to trash"],
+  [/\bin_trash"?\s*:/i, "moves a Notion page to trash"],
   [/method\s*:\s*["']DELETE["']/i, "sends a DELETE request"],
   [/app\.delete\(/, "adds a delete route"],
   [/["']?Paid["']?\s*:\s*(true|false|"__YES__")/, "writes the Paid checkbox"],

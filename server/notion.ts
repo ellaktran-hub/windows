@@ -2,7 +2,8 @@
 // Server side only: the token is passed in by the server entry and never
 // sent to the browser or written to logs.
 //
-// This file only reads. There is no delete, archive, or trash call here.
+// Reads, plus exactly four small writes (task status, Top 3, new task,
+// new sleep entry). There is no delete, archive, or trash call here.
 
 import type { Bill, Project, SleepEntry, Task } from "../shared/types.js";
 
@@ -33,44 +34,58 @@ export function idOf(u: string): string {
   return m ? m[0].toLowerCase() : String(u || "");
 }
 
+export const TASK_STATUSES = ["Not started", "In progress", "Done"] as const;
+export const TIME_BLOCKS = ["Morning", "Work day", "Lunch", "After work", "Evening"] as const;
+
+export interface NewTask { title: string; block: string; due: string | null }
+export interface NewSleep { night: string; bed: string; wake: string; hours: number }
+
 export class NotionReader {
   // base can point at a pretend Notion server, for local tests only.
   constructor(private token: string, private fetchImpl: Fetch = (i, init) => fetch(i, init), private base: string = NOTION_BASE) {}
 
-  private async post(path: string, body: unknown, retried = false): Promise<any> {
+  /**
+   * One request to Notion. Reads may try once more after a rate limit.
+   * Writes never retry: if the result is unknown (timeout, network, or a
+   * Notion server error) they fail with "unconfirmed" so the page can say so.
+   */
+  private async send(method: "GET" | "POST" | "PATCH", path: string, body: unknown, write: boolean, retried = false): Promise<any> {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let res: Response;
     try {
       res = await this.fetchImpl(this.base + path, {
-        method: "POST",
+        method,
         headers: {
           Authorization: "Bearer " + this.token,
           "Notion-Version": NOTION_VERSION,
-          "Content-Type": "application/json",
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         },
-        body: JSON.stringify(body),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: ctl.signal,
       });
     } catch {
+      if (write) throw new NotionFail("unconfirmed", 0);
       throw new NotionFail(ctl.signal.aborted ? "timeout" : "upstream_error", 0);
     } finally {
       clearTimeout(timer);
     }
-    if (res.ok) return res.json();
+    if (res.ok) {
+      try { return await res.json(); } catch { if (write) throw new NotionFail("unconfirmed", res.status); throw new NotionFail("bad_shape", res.status); }
+    }
 
     let code = "";
     try { code = ((await res.json()) as { code?: string }).code || ""; } catch { /* no body */ }
-    // Reads are safe to try once more after Notion asks us to slow down.
-    if (res.status === 429 && !retried) {
+    if (res.status === 429 && !write && !retried) {
       const wait = Math.min(Number(res.headers.get("retry-after") || 1), 5) * 1000;
       await new Promise((r) => setTimeout(r, wait));
-      return this.post(path, body, true);
+      return this.send(method, path, body, write, true);
     }
     if (res.status === 401) throw new NotionFail("unauthorized", 401, code);
     if (res.status === 403 || res.status === 404) throw new NotionFail("not_shared", res.status, code);
     if (res.status === 429) throw new NotionFail("rate_limited", 429, code);
-    if (res.status === 400) throw new NotionFail("bad_request", 400, code);
+    if (res.status === 400 || res.status === 409) throw new NotionFail("bad_request", res.status, code);
+    if (write) throw new NotionFail("unconfirmed", res.status, code);
     throw new NotionFail("upstream_error", res.status, code);
   }
 
@@ -78,7 +93,7 @@ export class NotionReader {
     const out: NotionPage[] = [];
     let cursor: string | undefined;
     for (let i = 0; i < MAX_PAGES; i++) {
-      const r = await this.post(`/data_sources/${dataSourceId}/query`, { ...body, page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+      const r = await this.send("POST", `/data_sources/${dataSourceId}/query`, { ...body, page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) }, false);
       if (!r || !Array.isArray(r.results)) throw new NotionFail("bad_shape", 200);
       for (const p of r.results) if (p && p.object === "page" && p.properties) out.push(p);
       if (!r.has_more || !r.next_cursor) break;
@@ -100,6 +115,53 @@ export class NotionReader {
   async sleep(): Promise<SleepEntry[]> {
     const rows = await this.query(DS.sleep, { sorts: [{ timestamp: "created_time", direction: "descending" }] });
     return rows.map(normSleep).filter((x) => x.night);
+  }
+
+  /* ---------- writes: only these four, nothing else ---------- */
+
+  /** Confirms a page really is a row in the Tasks database before changing it. */
+  private async assertTask(pageId: string): Promise<string> {
+    const id = idOf(pageId);
+    if (!/^[0-9a-f]{32}$/.test(id)) throw new NotionFail("bad_request", 400, "bad id");
+    const p = await this.send("GET", `/pages/${id}`, undefined, false);
+    const parent = p?.parent || {};
+    const ds = idOf(parent.data_source_id || "");
+    if (ds !== idOf(DS.tasks) || p.in_trash === true || p.archived === true) throw new NotionFail("not_a_task", 400);
+    return id;
+  }
+
+  async setTaskStatus(pageId: string, status: string): Promise<void> {
+    if (!(TASK_STATUSES as readonly string[]).includes(status)) throw new NotionFail("bad_request", 400, "status");
+    const id = await this.assertTask(pageId);
+    await this.send("PATCH", `/pages/${id}`, { properties: { Status: { status: { name: status } } } }, true);
+  }
+
+  async setTop3(pageId: string, on: boolean): Promise<void> {
+    const id = await this.assertTask(pageId);
+    await this.send("PATCH", `/pages/${id}`, { properties: { "Top 3": { checkbox: on === true } } }, true);
+  }
+
+  async createTask(t: NewTask): Promise<void> {
+    const properties: Record<string, unknown> = {
+      Task: { title: [{ text: { content: t.title } }] },
+      Status: { status: { name: "Not started" } },
+    };
+    if (t.block) properties["Time block"] = { select: { name: t.block } };
+    if (t.due) properties["Due"] = { date: { start: t.due } };
+    await this.send("POST", "/pages", { parent: { type: "data_source_id", data_source_id: DS.tasks }, properties }, true);
+  }
+
+  async createSleep(e: NewSleep): Promise<void> {
+    const rt = (v: string) => ({ rich_text: v ? [{ text: { content: v } }] : [] });
+    await this.send("POST", "/pages", {
+      parent: { type: "data_source_id", data_source_id: DS.sleep },
+      properties: {
+        "Night of": { title: [{ text: { content: e.night } }] },
+        Bedtime: rt(e.bed),
+        "Wake-up": rt(e.wake),
+        "Hours slept": { number: e.hours },
+      },
+    }, true);
   }
 }
 

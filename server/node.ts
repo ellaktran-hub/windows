@@ -18,7 +18,11 @@ const TOKEN = (process.env.NOTION_TOKEN || "").trim();
 const BASE = (!PROD && process.env.NOTION_API_BASE) || NOTION_BASE;
 const reader = TOKEN ? new NotionReader(TOKEN, undefined, BASE) : null;
 
-const app = createApp({ notion: () => reader, demo: !PROD || process.env.DEMO_MODES === "1" });
+const app = createApp({
+  notion: () => reader,
+  demo: !PROD || process.env.DEMO_MODES === "1",
+  extraOrigins: PROD ? [] : ["http://127.0.0.1:5173"],
+});
 
 if (PROD) {
   app.use("/*", serveStatic({ root: "./dist" }));
