@@ -3,7 +3,7 @@
 // boxes and forms change only what is on screen and say so.
 
 import "./styles.css";
-import { addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
+import { dayNum, addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
 import type { NoteBlock, ProjectContentResponse, RichBit } from "../shared/types.js";
 import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
@@ -14,6 +14,18 @@ interface Slot<T> { status: Status; data: T | null; err: unknown; source: Source
 const slot = <T>(): Slot<T> => ({ status: "loading", data: null, err: null, source: null });
 
 const WEEK_LIMIT = 3;
+// A different gentle line each day, chosen by the date so it stays put all day.
+const LINES = [
+  "One small thing at a time.", "Slow is still moving.", "You are allowed to rest.", "Done is kinder than perfect.",
+  "Start small. Small is enough.", "Today can be a soft day.", "One window at a time.", "You don't have to do it all today.",
+  "Be gentle with yourself today.", "A little progress still counts.", "It's okay to take the long way.", "Pick one thing. Let the rest wait.",
+  "Showing up is the hardest part.", "Notice one good thing today.", "Nothing needs to be finished right now.", "Small steps, steady heart.",
+  "Kindness first, lists second.", "You've handled hard days before.", "Ask for help if you need it.", "Good enough is good enough.",
+];
+const lineFor = (day: string) => LINES[((dayNum(day) % LINES.length) + LINES.length) % LINES.length];
+type TimeOfDay = "morning" | "afternoon" | "evening";
+const timeOfDay = (h: number): TimeOfDay => (h >= 5 && h < 12 ? "morning" : h >= 12 && h < 17 ? "afternoon" : "evening");
+const EVENING_FROM = 19; // after this hour, Today shows tomorrow.exe first
 const BLOCKS = ["Morning", "Work day", "Lunch", "After work", "Evening"];
 const TABS: Array<[string, string]> = [["today", "today"], ["calendar", "calendar"], ["tasks", "tasks"], ["bills", "bills"], ["projects", "projects"], ["sleep", "sleep"]];
 
@@ -31,6 +43,7 @@ const S = {
   billsGroup: "unpaid" as "unpaid" | "paid", // which bills the bills tab shows
   billForm: false, // the add-a-bill form is open
   confirmPaid: "", // the bill waiting for its second "mark paid" tap
+  doneToday: slot<Task[]>(), // tasks finished today, from Notion
   focusProject: "", // a project to scroll to when the projects tab opens
   openProject: "", // the project whose page is open (#project/<id>)
   notes: {} as Record<string, Slot<ProjectContentResponse>>, // project notes, loaded when a page opens
@@ -106,6 +119,8 @@ async function refreshAll() {
     load(S.bills, list<Bill>("/api/bills")),
     load(S.sleep, list<SleepEntry>("/api/sleep")),
     load(S.cal, calFetch(0)),
+    load(S.doneToday, list<Task>("/api/tasks/done-today")),
+    ...(hourNow() >= EVENING_FROM && S.calDay !== 1 ? [load(calSlot(1), calFetch(1))] : []),
     ...(S.calDay ? [load(calSlot(S.calDay), calFetch(S.calDay))] : []),
   ]);
   if (S.tab === "calendar" || S.range.data) await loadRange();
@@ -116,8 +131,8 @@ async function refreshAll() {
 }
 
 /* ---------- view helpers ---------- */
-function win(title: string, color: string, body: string, wide = false): string {
-  return `<section class="win${wide ? " wide" : ""}"><div class="bar ${color}"><span>${esc(title)}</span><span class="x" aria-hidden="true">×</span></div><div class="body">${body}</div></section>`;
+function win(title: string, color: string, body: string, wide = false, icon = ""): string {
+  return `<section class="win${wide ? " wide" : ""}"><div class="bar ${color}"><span>${icon ? `<svg class="px tiny ${icon}" aria-hidden="true"><use href="#px-${icon}"/></svg>` : ""}${esc(title)}</span><span class="x" aria-hidden="true">×</span></div><div class="body">${body}</div></section>`;
 }
 function errBlock(e: unknown, server: string) {
   return `<div class="note">${esc(errText(e, server))}</div><div><button class="btn" data-act="refresh">try again</button></div>`;
@@ -161,8 +176,8 @@ function hello(): string {
   // Refresh lives in the greeting's title bar; the "updated" time sits under the greeting.
   const refresh = `<button class="barbtn" type="button" data-act="refresh" aria-label="Refresh from Notion and Google"${S.refreshing ? " disabled" : ""}><span class="spin" aria-hidden="true">↻</span>${S.refreshing ? "refreshing" : "refresh"}</button>`;
   return `<section class="win wide hello"><div class="bar pink"><span>hi, lovely</span>${refresh}</div><div class="body">` +
-    `<div class="stack"><div class="date">${esc(weekday(t) + " · " + lbl(t))}</div><h1>${g}, <em>Ella.</em></h1>` +
-    `<div class="soft">One small thing at a time.</div>${up ? `<div class="meta">${esc(up)}</div>` : ""}</div><svg class="heart" aria-hidden="true"><use href="#px-heart"/></svg></div></section>` +
+    `<div class="stack"><div class="date"><svg class="px tiny ${h >= 6 && h < 18 ? "sun" : "moon"}" aria-hidden="true"><use href="#px-${h >= 6 && h < 18 ? "sun" : "moon"}"/></svg>${esc(weekday(t) + " · " + lbl(t))}</div><h1>${g}, <em>Ella.</em></h1>` +
+    `<div class="soft">${esc(lineFor(t))}</div>${up ? `<div class="meta">${esc(up)}</div>` : ""}</div><svg class="heart" aria-hidden="true"><use href="#px-heart"/></svg></div></section>` +
     `<nav class="tabs" aria-label="Pages">${TABS.map(([k, name]) => `<a class="tab" href="#${k}"${S.tab === k || (k === "projects" && S.tab === "project") ? ' aria-current="page"' : ""}>${name}</a>`).join("")}</nav>` +
     (isSample() ? '<div class="note sample wide">Sample content. This is not your Notion data yet, and nothing you tap here is saved.</div>' : "");
 }
@@ -201,7 +216,7 @@ function todayView(): string {
   const cal = win("today.exe", "sky", dayButtons() + sect(calSlot(n), (c) => calBody(c, n), "Google Calendar"));
   const keep = new Set(Object.keys(S.prevStatus));
   const top = R.top3(tasks, keep), due = R.dueToday(tasks, t, keep);
-  const topW = win("top_3.txt", "butter", sect(S.tasks, () => top.length ? top.map(todo).join("") : '<div class="soft">No top 3 chosen. Tap "top 3" on up to three tasks.</div>'));
+  const topW = win("top_3.txt", "butter", sect(S.tasks, () => top.length ? top.map(todo).join("") : '<div class="soft">No top 3 chosen. Tap "top 3" on up to three tasks.</div>'), false, "star");
   const dueW = win("due_today.txt", "peach", sect(S.tasks, () => due.length ? due.map(todo).join("") : '<div class="soft">Nothing due today.</div>'));
   const sl = win("sleep.log", "lilac", sect(S.sleep, (rows) => nightSummary(R.lastNight(rows, t), true)));
 
@@ -222,13 +237,50 @@ function todayView(): string {
   }));
   const bl = win("bills_soon.txt", "peach", sect(S.bills, (rows) => {
     const bs = R.billsSoon(rows, t);
-    return '<div class="meta">view only</div>' + (bs.length ? `<ul class="list">${bs.map((b) => `<li><div class="line"><span><b>${esc(b.name)}</b></span><span>${esc(money(b.amount))}</span></div><span class="meta">${esc(lbl(b.due!) + " · " + (b.due! < t ? "past its due date" : rel(b.due!, t)))}</span></li>`).join("")}</ul>` : '<div class="soft">No bills due in the next two weeks.</div>');
+    return (bs.length ? `<ul class="list">${bs.map((b) => `<li><div class="line"><span><b>${esc(b.name)}</b></span><span>${esc(money(b.amount))}</span></div><span class="meta">${esc(lbl(b.due!) + " · " + (b.due! < t ? "past its due date" : rel(b.due!, t)))}</span></li>`).join("")}</ul>` : '<div class="soft">No bills due in the next two weeks.</div>');
   }));
   const steps = win("next_steps.txt", "butter", sect(S.projects, (rows) => {
     const ps = R.nextSteps(rows);
     return ps.length ? `<ul class="steps">${ps.map((p) => `<li>${projLink(p, "meta")}${stepLines(p.next)}</li>`).join("")}</ul>` : '<div class="soft">No next steps written for Urgent or Active projects.</div>';
   }), true);
-  return cal + topW + dueW + sl + week + dl + bl + steps + bubble();
+  return eveningWin() + cal + topW + dueW + sl + doneWin() + week + dl + bl + steps + bubble();
+}
+
+/** Tasks finished today: from Notion, plus any just ticked here. Only shows once there is one. */
+function doneList(): Task[] {
+  const seen = new Set<string>(), out: Task[] = [];
+  const reopened = new Set((S.tasks.data || []).filter((x) => x.status !== "Done").map((x) => x.id));
+  for (const x of [...Object.values(S.doneKeep), ...(S.doneToday.data || [])]) {
+    if (seen.has(x.id) || reopened.has(x.id)) continue;
+    seen.add(x.id); out.push(x);
+  }
+  return out;
+}
+function doneWin(): string {
+  const d = doneList();
+  if (!d.length) return "";
+  const n = d.length;
+  return win("done_today.txt", "mint",
+    `<div class="mid">${n === 1 ? "One thing done today." : n + " things done today."}</div>` +
+    `<ul class="donelist">${d.map((x) => `<li>${esc(x.title)}</li>`).join("")}</ul>` +
+    '<div class="soft">That counts. Well done.</div>', true, "star");
+}
+
+/** After 7 pm: a calm look at tomorrow. */
+function eveningWin(): string {
+  if (hourNow() < EVENING_FROM) return "";
+  const t = todayStr(), tm = addDays(t, 1);
+  const c = calSlot(1);
+  let h = `<div class="meta">${esc(weekday(tm) + " · " + lbl(tm))}</div>`;
+  if (c.data && c.data.connected) {
+    h += c.data.work ? `<div class="mid">${esc("Work " + c.data.work)}</div>` : '<div class="soft">No shift scheduled.</div>';
+    if (c.data.tags.length) h += `<div class="row">${c.data.tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
+    if (c.data.appts.length) h += `<ul class="list">${c.data.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span><b>${esc(a.title)}</b></span></li>`).join("")}</ul>`;
+  } else if (c.status === "loading") h += '<div class="meta">loading</div>';
+  const due = (S.tasks.data || []).filter((x) => R.isOpen(x) && x.due === tm).sort(R.byDue);
+  if (due.length) h += "<hr>" + `<div class="meta">due tomorrow</div><ul class="donelist plain">${due.slice(0, 3).map((x) => `<li>${esc(x.title)}</li>`).join("")}</ul>` + (due.length > 3 ? `<div class="meta">and ${due.length - 3} more on the tasks tab</div>` : "");
+  h += '<div class="soft">That can wait until morning. Rest well.</div>';
+  return win("tomorrow.exe", "lilac", h, true, "moon");
 }
 
 function bubble(): string {
@@ -364,7 +416,7 @@ function sleepView(): string {
     '<div class="meta">Hours fill in from bedtime and wake-up. You can change them.</div>' +
     (dup && S.confirmDup ? `<div class="note">There is already an entry for ${esc(d.night)}. The newest one counts. Tap again to save another.</div>` : "") +
     `<div><button class="btn" type="submit"${S.busy.sleep ? " disabled" : ""}>${S.busy.sleep ? "saving" : dup && S.confirmDup ? "save another entry" : "save to Notion"}</button></div></form>`);
-  const last = win("last_night.log", "lilac", sect(S.sleep, (r) => nightSummary(R.lastNight(r, t), false)));
+  const last = win("last_night.log", "lilac", '<svg class="px cat" role="img" aria-label="a sleeping pixel cat"><use href="#px-cat"/></svg>' + sect(S.sleep, (r) => nightSummary(R.lastNight(r, t), false)));
   const wk = win("this_week.txt", "mint", sect(S.sleep, (r) => {
     const latest = R.latestPerNight(r);
     const nights: string[] = []; for (let i = 1; i <= 7; i++) nights.push(lbl(addDays(t, -i)));
@@ -502,7 +554,21 @@ function view(): string {
   return hello() + v + '<div class="foot">thank you for showing up today</div>';
 }
 
+/** A tiny pixel sparkle where a task was ticked. It lives outside the page, so redraws don't replay it. */
+function sparkle(el: Element) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const r = el.getBoundingClientRect();
+  const sp = document.createElement("div");
+  sp.className = "spark";
+  sp.setAttribute("aria-hidden", "true");
+  sp.style.left = r.left + r.width / 2 + "px";
+  sp.style.top = r.top + r.height / 2 + "px";
+  document.body.appendChild(sp);
+  setTimeout(() => sp.remove(), 700);
+}
+
 function render() {
+  document.documentElement.dataset.time = timeOfDay(hourNow());
   const a = document.activeElement as HTMLInputElement | null;
   const id = a?.id, ss = a?.selectionStart, se = a?.selectionEnd;
   app.innerHTML = view();
@@ -553,7 +619,7 @@ async function toggleDone(id: string) {
   const before = x.status;
   const next = wasDone ? S.prevStatus[id] || "Not started" : "Done";
   if (!isLive(S.tasks)) {
-    if (wasDone) { delete S.prevStatus[id]; delete S.doneKeep[id]; } else { S.prevStatus[id] = before; }
+    if (wasDone) { delete S.prevStatus[id]; delete S.doneKeep[id]; } else { S.prevStatus[id] = before; S.doneKeep[id] = { ...x, status: "Done" }; }
     x.status = next; render(); toast(SAMPLE_NOTE); return;
   }
   S.busy[id] = true; x.status = next; render();
@@ -564,6 +630,7 @@ async function toggleDone(id: string) {
     toast(wasDone ? "Moved back onto your list." : "Marked done in Notion.");
     S.busy[id] = false;
     await reloadTasks();
+    void load(S.doneToday, list<Task>("/api/tasks/done-today"));
   } catch (e) {
     x.status = before; S.busy[id] = false; render(); toast(writeMsg(e), true);
   }
@@ -689,7 +756,7 @@ app.addEventListener("click", (e) => {
   else if (a === "billsview") { S.billsGroup = b.dataset.v === "paid" ? "paid" : "unpaid"; render(); }
   else if (a === "goproject") { e.preventDefault(); goProject(id); }
   else if (a === "backprojects") { e.preventDefault(); goProject(id); }
-  else if (a === "toggle") void toggleDone(id);
+  else if (a === "toggle") { if (find(id)?.status !== "Done") sparkle(b); void toggleDone(id); }
   else if (a === "pin") void togglePin(id);
 });
 app.addEventListener("input", (e) => {

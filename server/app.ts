@@ -14,7 +14,7 @@ import { secureHeaders } from "hono/secure-headers";
 import type { CalendarRangeResponse, CalendarResponse, ListResponse, ProjectContentResponse } from "../shared/types.js";
 import { BILL_REPEATS, BILL_TYPES, NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
 import { sampleCalendar, sampleData, sampleNotes } from "./sample.js";
-import { authUrl, exchangeCode, GoogleFail, readRange, readToday, type GoogleConfig } from "./google.js";
+import { authUrl, exchangeCode, GoogleFail, midnight, readRange, readToday, type GoogleConfig } from "./google.js";
 import { addDays, todayStr } from "../shared/dates.js";
 
 export interface AppOptions<E extends object> {
@@ -210,6 +210,20 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
 
   app.get("/api/health", (c) => c.json({ ok: true }));
   app.get("/api/tasks", list("tasks"));
+  // Tasks finished today, for done_today.txt.
+  app.get("/api/tasks/done-today", async (c) => {
+    const d = await demo(c);
+    if (d instanceof Response) return d;
+    const notion = opts.notion(c);
+    if (!notion || d === "empty") return c.json({ source: notion ? "live" : "sample", items: [] } satisfies ListResponse<unknown>);
+    try {
+      return c.json({ source: "live", items: await notion.doneSince(midnight(todayStr())) } satisfies ListResponse<unknown>);
+    } catch (e) {
+      const code = e instanceof NotionFail ? e.code : "server_error";
+      console.warn(`notion read done-today failed: ${code}`);
+      return c.json({ error: { code, message: "Notion read failed" } }, 502);
+    }
+  });
   app.get("/api/projects", list("projects"));
   app.get("/api/bills", list("bills"));
   app.get("/api/sleep", list("sleep"));

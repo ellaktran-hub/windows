@@ -110,6 +110,14 @@ export class NotionReader {
     const rows = await this.query(DS.tasks, { filter: { property: "Status", status: { does_not_equal: "Done" } } });
     return rows.map(normTask);
   }
+  /** Tasks marked Done since midnight (by when they were last changed). */
+  async doneSince(isoMidnight: string): Promise<Task[]> {
+    const rows = await this.query(DS.tasks, { filter: { and: [
+      { property: "Status", status: { equals: "Done" } },
+      { timestamp: "last_edited_time", last_edited_time: { on_or_after: isoMidnight } },
+    ] } });
+    return rows.map(normTask);
+  }
   async projects(): Promise<Project[]> {
     return (await this.query(DS.projects)).map(normProject);
   }
