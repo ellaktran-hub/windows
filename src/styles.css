@@ -15,6 +15,7 @@
   --sky: #a9dcef;
   --peach: #ffd2b8;
   --lilac: #cfc4f5;
+  --lilac-deep: #9a8ae0;
   --mint: #bfe8d0;
   --font-mono: "Courier Prime", "Courier New", monospace;
   --font-serif: "Newsreader", Georgia, serif;
@@ -71,7 +72,7 @@ a.plain { color: inherit; }
 a.golink { color: inherit; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
 a.golink.meta { opacity: 1; color: var(--coral-ink); }
 .win { outline: 3px solid transparent; outline-offset: 3px; transition: outline-color 0.9s ease-out; }
-.win.glow { outline-color: var(--lilac); transition: none; }
+.win.glow { outline-color: var(--lilac-deep); transition: none; }
 
 .tabs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
 .tab { font: inherit; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--ink); text-decoration: none; background: var(--cream); border: 2px solid var(--ink); border-radius: 6px; padding: 5px 14px; min-height: 32px; display: inline-flex; align-items: center; box-shadow: 3px 3px 0 var(--ink); }
