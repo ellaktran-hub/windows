@@ -63,6 +63,9 @@ a.link { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(-
 .tag.butter { background: var(--butter); } .tag.sky { background: var(--sky); } .tag.mint { background: var(--mint); } .tag.peach { background: var(--peach); } .tag.lilac { background: var(--lilac); } .tag.pink { background: var(--pink); }
 hr { border: 0; border-top: 2px dashed var(--ink); opacity: 0.35; margin: 2px 0; width: 100%; }
 a.plain { color: inherit; }
+a.golink { color: inherit; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+a.golink.meta { opacity: 1; color: var(--coral-ink); }
+.win.glow { outline: 4px solid var(--coral); outline-offset: 3px; }
 
 .tabs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
 .tab { font: inherit; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--ink); text-decoration: none; background: var(--cream); border: 2px solid var(--ink); border-radius: 6px; padding: 5px 14px; min-height: 32px; display: inline-flex; align-items: center; box-shadow: 3px 3px 0 var(--ink); }

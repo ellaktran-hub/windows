@@ -27,6 +27,7 @@ const S = {
   calAhead: {} as Record<number, Slot<Calendar>>, // days after today, loaded when tapped
   range: slot<CalendarRangeResponse>(), // the calendar tab, loaded when opened
   weekOpen: false, // this_week.txt showing everything
+  focusProject: "", // a project to scroll to when the projects tab opens
   updated: null as number | null,
   refreshing: false,
   confirmDup: false,
@@ -209,7 +210,7 @@ function todayView(): string {
   }), true);
   const dl = win("deadlines.txt", "lilac", sect(S.projects, (rows) => {
     const ps = R.deadlinesSoon(rows, t);
-    return ps.length ? `<ul class="list">${ps.map((p) => `<li><span class="meta">${esc(lbl(p.deadline!) + " · " + rel(p.deadline!, t))}</span><span><b>${esc(p.name)}</b></span>${p.next ? `<span>${esc(p.next)}</span>` : ""}</li>`).join("")}</ul>` : '<div class="soft">No deadlines in the next two weeks.</div>';
+    return ps.length ? `<ul class="list">${ps.map((p) => `<li><span class="meta">${esc(lbl(p.deadline!) + " · " + rel(p.deadline!, t))}</span><span><b>${projLink(p, "plain")}</b></span>${p.next ? `<span>${esc(p.next)}</span>` : ""}</li>`).join("")}</ul>` : '<div class="soft">No deadlines in the next two weeks.</div>';
   }));
   const bl = win("bills_soon.txt", "peach", sect(S.bills, (rows) => {
     const bs = R.billsSoon(rows, t);
@@ -217,7 +218,7 @@ function todayView(): string {
   }));
   const steps = win("next_steps.txt", "butter", sect(S.projects, (rows) => {
     const ps = R.nextSteps(rows);
-    return ps.length ? `<ul class="steps">${ps.map((p) => `<li><span class="meta">${esc(p.name)}</span>${stepLines(p.next)}</li>`).join("")}</ul>` : '<div class="soft">No next steps written for Urgent or Active projects.</div>';
+    return ps.length ? `<ul class="steps">${ps.map((p) => `<li>${projLink(p, "meta")}${stepLines(p.next)}</li>`).join("")}</ul>` : '<div class="soft">No next steps written for Urgent or Active projects.</div>';
   }), true);
   return cal + topW + dueW + sl + week + dl + bl + steps + bubble();
 }
@@ -262,6 +263,16 @@ function billsView(): string {
 const STATUS_ORDER = ["Urgent", "Active", "Ongoing", "Later"];
 const STATUS_COLOR: Record<string, string> = { Urgent: "peach", Active: "butter", Ongoing: "mint", Later: "lilac" };
 /** "Move out!" -> "move_out.txt", like the other window names. */
+/** A project's name that opens its window on the projects tab. */
+function projLink(p: Project, cls: string): string {
+  return `<a class="${cls} golink" href="#projects" data-act="goproject" data-id="${esc(p.id)}">${esc(p.name)}</a>`;
+}
+function goProject(id: string) {
+  S.focusProject = id;
+  if (location.hash !== "#projects") location.hash = "#projects";
+  else { route(); scrollToProject(); }
+}
+
 /** A Next step with several lines shows each line as its own step. */
 function stepLines(next: string): string {
   const lines = next.split(/\r?\n+/).map((x) => x.replace(/^\s*([-*•]|\d+[.)])\s*/, "").trim()).filter(Boolean);
@@ -294,7 +305,7 @@ function projectsView(): string {
       (tags ? `<div class="row">${tags}</div>` : "") +
       (p.next ? `<div class="stack tight"><span class="meta">next step</span>${stepLines(p.next)}</div>` : '<div class="meta">no next step written</div>') +
       `<div><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
-    return win(fileName(p.name), color, body);
+    return win(fileName(p.name), color, body).replace('<section class="win"', `<section class="win" id="p-${esc(p.id)}"`);
   }).join("");
 }
 
@@ -494,6 +505,7 @@ app.addEventListener("click", (e) => {
   if (a === "refresh") void refreshAll();
   else if (a === "day") pickDay(Number(b.dataset.day));
   else if (a === "week") { S.weekOpen = !S.weekOpen; render(); }
+  else if (a === "goproject") { e.preventDefault(); goProject(id); }
   else if (a === "toggle") void toggleDone(id);
   else if (a === "pin") void togglePin(id);
 });
@@ -529,7 +541,18 @@ function route() {
   if (S.tab === "calendar" && !S.range.data && S.range.status !== "error" && S.updated) void loadRange();
   render();
 }
-window.addEventListener("hashchange", () => { route(); window.scrollTo(0, 0); });
+window.addEventListener("hashchange", () => { route(); if (!scrollToProject()) window.scrollTo(0, 0); });
+function scrollToProject(): boolean {
+  const id = S.focusProject; S.focusProject = "";
+  if (!id || S.tab !== "projects") return false;
+  const el = document.getElementById("p-" + id);
+  if (!el) return false;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+  el.classList.add("glow");
+  setTimeout(() => el.classList.remove("glow"), 1600);
+  return true;
+}
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && S.updated && Date.now() - S.updated > 5 * 60e3) void refreshAll();
 });
