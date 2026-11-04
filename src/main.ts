@@ -168,10 +168,10 @@ function calBody(c: Calendar, n: number): string {
   const when = n === 0 ? "today" : "that day";
   const d = addDays(todayStr(), n);
   let h = `<div class="meta">${esc(n === 0 ? "Work" : "Work · " + weekday(d) + " " + lbl(d))}</div>`;
-  if (c.work) h += `<div class="big">${esc(c.work)}</div>`;
-  else if (c.noWork.length) h += `<div class="big">No work ${when}</div>`;
-  else h += '<div class="soft">No shift on the calendar.</div>';
-  const tags = c.tags.concat(c.noWork);
+  // One line either way: hours, or "No work" whether the day is marked off or just has no shift.
+  h += `<div class="big">${esc(c.work || "No work " + when)}</div>`;
+  const plain = /^(no work|day off|off|not working)$/i;
+  const tags = c.tags.concat(c.noWork.filter((x) => !plain.test(x.trim())));
   if (tags.length) h += `<div class="row">${tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
   h += "<hr>";
   h += c.appts.length ? `<ul class="list">${c.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span><b>${esc(a.title)}</b></span></li>`).join("")}</ul>` : `<div class="meta">No appointments ${when}</div>`;
