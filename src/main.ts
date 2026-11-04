@@ -148,7 +148,7 @@ function blocksHtml(h: number | null): string {
   return `<div class="blocks" role="img" aria-label="${n} of 8 hours">${s}</div>`;
 }
 function nightSummary(n: SleepEntry | null, withLink: boolean): string {
-  if (!n) return '<div class="soft">Last night is not logged yet.</div>' + (withLink ? '<div><a class="btn" href="#sleep">log it</a></div>' : "");
+  if (!n) return '<div class="soft">Last night is not logged yet.</div>' + (withLink ? '<div><a class="btn go" href="#sleep">log it</a></div>' : "");
   return `<div class="big">${esc(n.hours == null ? "logged" : n.hours + " hours")}</div>` + (n.hours == null ? "" : blocksHtml(n.hours)) +
     `<div class="meta">${esc([n.bed && "bed " + n.bed, n.wake && "up " + n.wake].filter(Boolean).join(" · "))}</div>`;
 }
@@ -181,7 +181,7 @@ function dayButtons(): string {
 
 function calBody(c: Calendar, n: number): string {
   if (!c.connected) return '<div class="meta">Work</div><div class="soft">The calendar is not connected yet.</div>' +
-    (c.canConnect ? '<div><a class="btn" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : "");
+    (c.canConnect ? '<div><a class="btn go" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : "");
   const when = n === 0 ? "today" : "that day";
   const d = addDays(todayStr(), n);
   let h = `<div class="meta">${esc(n === 0 ? "Work" : "Work · " + weekday(d) + " " + lbl(d))}</div>`;
@@ -213,7 +213,7 @@ function todayView(): string {
     const shown = S.weekOpen ? w : w.slice(0, WEEK_LIMIT);
     const more = w.length - WEEK_LIMIT;
     return shown.map(todo).join("") + (more > 0
-      ? `<div><button class="btn quiet" type="button" data-act="week" aria-expanded="${S.weekOpen}">${S.weekOpen ? "show fewer" : "show " + more + " more"}</button></div>`
+      ? `<div><button class="btn soft" type="button" data-act="week" aria-expanded="${S.weekOpen}">${S.weekOpen ? "show fewer" : "show " + more + " more"}</button></div>`
       : "");
   }), true);
   const dl = win("deadlines.txt", "lilac", sect(S.projects, (rows) => {
@@ -283,17 +283,17 @@ function billsView(): string {
     `<label for="billType">Type<select id="billType" data-draft="billType">${opt(["Rent", "Utilities", "Other", "Yearly renewal"], d.billType)}</select></label>` +
     "</div>" +
     '<div class="meta">Adds a new bill to Notion. It does not pay or mark anything paid.</div>' +
-    `<div class="row"><button class="btn" type="submit"${S.busy.bill ? " disabled" : ""}>${S.busy.bill ? "adding" : "add to Notion"}</button><button class="btn quiet" type="button" data-act="billform">close</button></div>` +
+    `<div class="row"><button class="btn" type="submit"${S.busy.bill ? " disabled" : ""}>${S.busy.bill ? "adding" : "add to Notion"}</button><button class="btn soft" type="button" data-act="billform">close</button></div>` +
     "</form>", true) : "";
-  const addBtn = S.billForm ? "" : '<div class="status"><button class="btn" type="button" data-act="billform">add a bill</button></div>';
+  const addBtn = S.billForm ? "" : '<div class="status"><button class="btn add" type="button" data-act="billform">add a bill</button></div>';
   if (!list.length) return addBtn + form + sw + note + win("bills.txt", "mint", `<div class="soft">${showPaid ? "No bills marked paid." : "No unpaid bills listed."}</div>`, true);
   return addBtn + form + sw + note + list.map((b) => {
     const when = b.due ? (showPaid ? lbl(b.due) : b.due < t ? lbl(b.due) + " · past its due date" : lbl(b.due) + " · due " + rel(b.due, t)) : "no date";
     const tags = [b.type, b.repeats].filter(Boolean).map((x) => `<span class="tag">${esc(x.toLowerCase())}</span>`).join("") + (showPaid ? '<span class="tag mint">paid</span>' : "");
     const busy = !!S.busy["bill" + b.id];
     const action = showPaid
-      ? `<button class="btn quiet" type="button" data-act="unpaid" data-id="${esc(b.id)}"${busy ? " disabled" : ""}>move back to unpaid</button>`
-      : `<button class="btn${S.confirmPaid === b.id ? "" : " quiet"}" type="button" data-act="paid" data-id="${esc(b.id)}"${busy ? " disabled" : ""}>${S.confirmPaid === b.id ? "tap again to confirm" : "mark paid"}</button>`;
+      ? `<button class="btn soft" type="button" data-act="unpaid" data-id="${esc(b.id)}"${busy ? " disabled" : ""}>move back to unpaid</button>`
+      : `<button class="btn pay${S.confirmPaid === b.id ? " confirm" : ""}" type="button" data-act="paid" data-id="${esc(b.id)}"${busy ? " disabled" : ""}>${S.confirmPaid === b.id ? "tap again to confirm" : "mark paid"}</button>`;
     const body = `<div class="line"><span class="mid">${esc(b.name)}</span><span class="mid">${esc(money(b.amount))}</span></div>` +
       `<div class="meta">${esc(when)}</div>` + (tags ? `<div class="row">${tags}</div>` : "") +
       `<div class="row">${action}</div>`;
@@ -345,7 +345,7 @@ function projectsView(): string {
     const body = `<div class="mid"><a class="plain golink" href="#project/${esc(p.id)}">${esc(p.name)}</a></div>` +
       (tags ? `<div class="row">${tags}</div>` : "") +
       (p.next ? `<div class="stack tight"><span class="meta">next step</span>${stepLines(p.next)}</div>` : '<div class="meta">no next step written</div>') +
-      `<div class="row"><a class="btn quiet" href="#project/${esc(p.id)}">open</a><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
+      `<div class="row"><a class="btn go" href="#project/${esc(p.id)}">open</a><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
     return win(fileName(p.name), color, body).replace('<section class="win"', `<section class="win" id="p-${esc(p.id)}"`);
   }).join("");
 }
@@ -385,9 +385,9 @@ function calendarView(): string {
   const note = r.status === "error" ? `<div class="note wide">${esc(errText(r.err, "Google Calendar"))} Showing the last copy.</div>` : "";
   if (!d.connected) {
     return win("calendar.txt", "sky", '<div class="soft">The calendar is not connected yet.</div>' +
-      (d.canConnect ? '<div><a class="btn" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : ""), true);
+      (d.canConnect ? '<div><a class="btn go" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : ""), true);
   }
-  const intro = '<div class="status"><a class="btn" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer">open Google Calendar</a><span class="meta">the next two weeks</span></div>';
+  const intro = '<div class="status"><a class="btn go" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer">open Google Calendar</a><span class="meta">the next two weeks</span></div>';
   const days = d.days.map(({ day, calendar: c }, i) => {
     if (!c.connected) return "";
     const name = (weekday(day).slice(0, 3) + "_" + lbl(day).replace(" ", "_")).toLowerCase() + ".txt";
@@ -442,7 +442,7 @@ function notesHtml(blocks: NoteBlock[]): string {
 
 function projectPageView(): string {
   const id = S.openProject;
-  const back = `<div class="status"><a class="btn quiet" href="#projects" data-act="backprojects" data-id="${esc(id)}">all projects</a></div>`;
+  const back = `<div class="status"><a class="btn go back" href="#projects" data-act="backprojects" data-id="${esc(id)}">all projects</a></div>`;
   if (!S.projects.data) return back + win("project.txt", "butter", sect(S.projects, () => ""), true);
   const p = S.projects.data.find((x) => x.id === id);
   if (!p) return back + win("project.txt", "butter", '<div class="soft">That project was not found. It may have been renamed or moved in Notion.</div>', true);

@@ -85,6 +85,20 @@ a.golink.meta { opacity: 1; color: var(--coral-ink); }
 .btn:active { box-shadow: none; transform: translate(3px, 3px); }
 .btn[disabled] { opacity: 0.55; cursor: default; }
 .btn.quiet { background: var(--cream); }
+/* Each kind of button has its own look. Plain .btn (butter, hard shadow) saves things. */
+.btn.go { background: var(--sky); border-radius: 999px; padding-inline: 16px; }
+.btn.go::after { content: " \2192"; }
+.btn.go.back::after { content: none; }
+.btn.go.back::before { content: "\2190  "; white-space: pre; }
+.btn.go:hover { background: var(--mint); }
+.btn.add { background: var(--lilac); }
+.btn.add::before { content: "+ "; }
+.btn.add:hover { background: var(--pink); }
+.btn.pay { background: var(--mint); border-radius: 4px; }
+.btn.pay.confirm { background: var(--peach); color: var(--coral-ink); border-color: var(--coral-ink); box-shadow: 3px 3px 0 var(--coral-ink); }
+.btn.soft { background: transparent; border-style: dashed; box-shadow: none; font-weight: 700; }
+.btn.soft:hover { background: var(--paper); }
+.btn.soft:active { transform: none; }
 a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 :focus-visible { outline: 3px solid var(--coral); outline-offset: 2px; }
 
