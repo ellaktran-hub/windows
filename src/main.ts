@@ -151,11 +151,12 @@ function hello(): string {
   const t = todayStr(), h = hourNow();
   const g = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
   const up = S.refreshing && !S.updated ? "loading" : S.updated ? "updated " + fmtTime(S.updated) : "";
-  return `<section class="win wide hello"><div class="bar pink"><span>hi, lovely</span><span class="x" aria-hidden="true">×</span></div><div class="body">` +
+  // Refresh lives in the greeting's title bar; the "updated" time sits under the greeting.
+  const refresh = `<button class="barbtn" type="button" data-act="refresh" aria-label="Refresh from Notion and Google"${S.refreshing ? " disabled" : ""}><span class="spin" aria-hidden="true">↻</span>${S.refreshing ? "refreshing" : "refresh"}</button>`;
+  return `<section class="win wide hello"><div class="bar pink"><span>hi, lovely</span>${refresh}</div><div class="body">` +
     `<div class="stack"><div class="date">${esc(weekday(t) + " · " + lbl(t))}</div><h1>${g}, <em>Ella.</em></h1>` +
-    `<div class="soft">One small thing at a time.</div></div><svg class="heart" aria-hidden="true"><use href="#px-heart"/></svg></div></section>` +
+    `<div class="soft">One small thing at a time.</div>${up ? `<div class="meta">${esc(up)}</div>` : ""}</div><svg class="heart" aria-hidden="true"><use href="#px-heart"/></svg></div></section>` +
     `<nav class="tabs" aria-label="Pages">${TABS.map(([k, name]) => `<a class="tab" href="#${k}"${S.tab === k ? ' aria-current="page"' : ""}>${name}</a>`).join("")}</nav>` +
-    `<div class="status"><span class="meta">${esc(up)}</span><button class="btn quiet" data-act="refresh"${S.refreshing ? " disabled" : ""}>refresh</button></div>` +
     (isSample() ? '<div class="note sample wide">Sample content. This is not your Notion data yet, and nothing you tap here is saved.</div>' : "");
 }
 
@@ -177,8 +178,8 @@ function calBody(c: Calendar, n: number): string {
   const when = n === 0 ? "today" : "that day";
   const d = addDays(todayStr(), n);
   let h = `<div class="meta">${esc(n === 0 ? "Work" : "Work · " + weekday(d) + " " + lbl(d))}</div>`;
-  // One line either way: hours, or "No work". A day off and a day with no shift are the same thing.
-  h += `<div class="big">${esc(c.work || "No work " + when)}</div>`;
+  // Hours, or one small italic line. A day off and a day with no shift are the same thing.
+  h += c.work ? `<div class="big">${esc(c.work)}</div>` : '<div class="soft">No shift scheduled.</div>';
   const tags = c.tags; // all-day Work events, like payday
   if (tags.length) h += `<div class="row">${tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
   h += "<hr>";
@@ -346,15 +347,12 @@ function calendarView(): string {
     return win("calendar.txt", "sky", '<div class="soft">The calendar is not connected yet.</div>' +
       (d.canConnect ? '<div><a class="btn" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : ""), true);
   }
-  const intro = win("calendar.txt", "sky",
-    '<div class="soft">The next two weeks. To change something, open it in Google Calendar.</div>' +
-    '<div><a class="btn" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer">open Google Calendar</a></div>', true);
+  const intro = '<div class="status"><a class="btn" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer">open Google Calendar</a><span class="meta">the next two weeks</span></div>';
   const days = d.days.map(({ day, calendar: c }, i) => {
     if (!c.connected) return "";
     const name = (weekday(day).slice(0, 3) + "_" + lbl(day).replace(" ", "_")).toLowerCase() + ".txt";
-    const when = day === t ? "today" : "that day";
     let h = `<div class="row"><span class="meta">${esc(weekday(day) + " · " + lbl(day))}</span>${day === t ? '<span class="tag butter">today</span>' : ""}</div>`;
-    h += `<div class="mid">${esc(c.work ? "Work " + c.work : "No work " + when)}</div>`;
+    h += c.work ? `<div class="mid">${esc("Work " + c.work)}</div>` : '<div class="soft">No shift scheduled.</div>';
     if (c.tags.length) h += `<div class="row">${c.tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
     h += c.appts.length
       ? `<ul class="list">${c.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span>${a.link ? `<a class="plain" href="${esc(a.link)}" target="_blank" rel="noopener noreferrer"><b>${esc(a.title)}</b></a>` : `<b>${esc(a.title)}</b>`}</span></li>`).join("")}</ul>`
