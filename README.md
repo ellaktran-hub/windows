@@ -19,6 +19,33 @@ A personal life-planner app: a retro pastel desktop of pop-up windows that reads
 
 If a window says a database is not shared, repeat step 6 for that database. If it says the token was not accepted, check step 5.
 
+## Put it on your phone (Cloudflare)
+
+The app runs on Cloudflare Workers. Cloudflare Access sits in front of it with an email-code login that only your email can pass. The app also checks that login itself. Until steps 3 to 5 are done, it shows only a "locked" page, with no data.
+
+Before signing up, check https://www.cloudflare.com/plans/developer-platform/ and the Zero Trust plans page. If any step asks for a card or a payment, stop there and decide first.
+
+1. **Make a Cloudflare account** at https://dash.cloudflare.com/sign-up.
+2. **Deploy from GitHub.** In the dashboard, go to Workers & Pages, then Create, then "Import a repository". Connect GitHub, choose `ellaktran-hub/windows`, and use:
+   - Build command: `npm run build`
+   - Deploy command: `npx wrangler deploy`
+
+   When it finishes, it gives you an address like `home-window.<something>.workers.dev`. Opening it should show "This page is locked." That is expected.
+3. **Turn on the login.** Open the worker, go to Settings, then Domains & Routes. Next to the `workers.dev` address, turn on Cloudflare Access. Then open "Manage Cloudflare Access" and set the policy to allow only your email. If it asks you to create a Zero Trust team, pick a team name and the Free plan. Note the team name, because your team domain is `<team name>.cloudflareaccess.com`.
+4. **Copy the AUD tag.** In Zero Trust, go to Access, then Applications, and open the app for this worker. Copy the "Application Audience (AUD) Tag".
+5. **Add the settings.** Back on the worker, go to Settings, then Variables and Secrets, and add:
+   - `ACCESS_TEAM_DOMAIN` (text), for example `yourteam.cloudflareaccess.com`
+   - `ACCESS_AUD` (text), the AUD tag from step 4
+   - `ALLOWED_EMAIL` (text), your email
+   - `NOTION_TOKEN` (choose Secret), your Notion integration secret
+
+   Save and deploy.
+6. **Open it on your phone.** Sign in with the email code.
+   - On an iPhone in Safari: tap Share, then "Add to Home Screen".
+   - On Android in Chrome: tap the menu, then "Add to Home screen" or "Install app".
+
+Every push to `main` deploys a new version automatically.
+
 ## Run it on your computer
 
 You need Node.js 20.19 or newer.
@@ -71,7 +98,10 @@ Secrets go only in a `.env` file, which git ignores. Copy `.env.example` to `.en
 
 ## Layout
 
-- `server/`: the small Hono server. Later phases keep the Notion and Google credentials here.
+- `server/app.ts`: the app's JSON routes, shared by both versions.
+- `server/node.ts`: runs it on your computer (127.0.0.1 only).
+- `server/worker.ts`: runs it on Cloudflare, behind the login check in `server/access.ts`.
+- `server/notion.ts`: reads Notion. The token stays on the server.
 - `src/`: the page (plain TypeScript and CSS, built with Vite).
 - `src/rules.ts`: the planner rules (Top 3, due today, coming up, start with, sleep).
 - `shared/`: date and sleep-time helpers, and the data shapes.

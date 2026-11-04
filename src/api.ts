@@ -15,16 +15,18 @@ export async function getJson<T>(path: string): Promise<T> {
   const url = demo ? path + "?demo=" + encodeURIComponent(demo) : path;
   let res: Response;
   try {
-    res = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" }, cache: "no-store" });
+    // redirect: "manual" so an expired login shows up as a redirect, not a network error.
+    res = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" }, cache: "no-store", redirect: "manual" });
   } catch (e) {
     throw new ApiFail(ctl.signal.aborted ? "timeout" : "offline");
   } finally {
     clearTimeout(timer);
   }
+  if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) throw new ApiFail("signed_out");
   let body: unknown = null;
   try { body = await res.json(); } catch { /* handled below */ }
   if (!res.ok) {
-    const code = (body as { error?: { code?: string } } | null)?.error?.code || "server_error";
+    const code = (body as { error?: { code?: string } } | null)?.error?.code || (res.status === 403 ? "signed_out" : "server_error");
     throw new ApiFail(code);
   }
   if (body == null) throw new ApiFail("bad_shape");
@@ -36,6 +38,7 @@ export function errText(e: unknown, server: string): string {
   const c = e instanceof ApiFail ? e.code : "unknown";
   if (c === "offline") return "Could not reach the app. Check your connection, then tap try again.";
   if (c === "timeout") return server + " is taking a long time. Tap try again in a moment.";
+  if (c === "signed_out") return "Your sign-in ended. Reload the page to sign in again.";
   if (c === "not_connected") return server + " is not connected yet.";
   if (c === "unauthorized") return server + " did not accept the token. Check the Notion token in the .env file, restart the app, then tap try again.";
   if (c === "not_shared") return "A " + server + " database is not shared with the app yet. Share it with the integration (steps in the README), then tap try again.";

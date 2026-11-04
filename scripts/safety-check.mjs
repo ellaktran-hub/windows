@@ -33,5 +33,9 @@ for (const f of files("dist")) {
   if (/NOTION_TOKEN|GOOGLE_CLIENT_SECRET/.test(text)) problems.push(`${f}: mentions a secret setting`);
 }
 
+// Secrets belong in the Cloudflare dashboard, never in the settings file.
+if (existsSync("wrangler.jsonc") && /NOTION_TOKEN"?\s*:|ntn_/.test(readFileSync("wrangler.jsonc", "utf8"))) problems.push("wrangler.jsonc: holds the Notion token");
+if (existsSync("wrangler.jsonc") && !/"run_worker_first"\s*:\s*true/.test(readFileSync("wrangler.jsonc", "utf8"))) problems.push("wrangler.jsonc: the login check must run before the page is served");
+
 if (problems.length) { console.error("Safety check found problems:\n" + problems.join("\n")); process.exit(1); }
 console.log(`Safety check passed (${code.length} source files, ${files("dist").length} built files).`);

@@ -1,0 +1,21 @@
+// Cloudflare Workers settings for Home Window.
+// Secrets (NOTION_TOKEN) and login settings (ACCESS_TEAM_DOMAIN, ACCESS_AUD,
+// ALLOWED_EMAIL) are set in the Cloudflare dashboard, never in this file.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "home-window",
+  "main": "server/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Send every request through the worker first, so the login check covers the page too.
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "workers_dev": true,
+  // No extra preview addresses that could sit outside the login.
+  "preview_urls": false,
+  // Keep the login settings typed into the dashboard when a new version deploys.
+  "keep_vars": true
+}

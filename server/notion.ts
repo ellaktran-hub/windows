@@ -1,14 +1,13 @@
 // Reads the Notion "Life planner" through Notion's REST API.
-// Server side only: the token is read from the environment and never sent
-// to the browser or written to logs.
+// Server side only: the token is passed in by the server entry and never
+// sent to the browser or written to logs.
 //
 // This file only reads. There is no delete, archive, or trash call here.
 
 import type { Bill, Project, SleepEntry, Task } from "../shared/types.js";
 
-export const NOTION_VERSION = process.env.NOTION_VERSION || "2026-03-11";
-// NOTION_API_BASE exists only so tests can point at a pretend Notion server.
-const BASE = (process.env.NODE_ENV !== "production" && process.env.NOTION_API_BASE) || "https://api.notion.com/v1";
+export const NOTION_VERSION = "2026-03-11";
+export const NOTION_BASE = "https://api.notion.com/v1";
 const TIMEOUT_MS = 15000;
 const MAX_PAGES = 5; // up to 500 rows per database, plenty for a personal planner
 
@@ -35,14 +34,15 @@ export function idOf(u: string): string {
 }
 
 export class NotionReader {
-  constructor(private token: string, private fetchImpl: Fetch = fetch) {}
+  // base can point at a pretend Notion server, for local tests only.
+  constructor(private token: string, private fetchImpl: Fetch = (i, init) => fetch(i, init), private base: string = NOTION_BASE) {}
 
   private async post(path: string, body: unknown, retried = false): Promise<any> {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let res: Response;
     try {
-      res = await this.fetchImpl(BASE + path, {
+      res = await this.fetchImpl(this.base + path, {
         method: "POST",
         headers: {
           Authorization: "Bearer " + this.token,
