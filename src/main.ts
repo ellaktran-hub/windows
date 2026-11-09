@@ -8,7 +8,7 @@ import type { NoteBlock, ProjectContentResponse, RichBit } from "../shared/types
 import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
 import * as R from "./rules.js";
-import { CARDS, CATEGORIES, bestByCategory, rateFor } from "./cards.js";
+import { CARDS, CATEGORIES, bestByCategory, nextAutopay, ordinal, rateFor } from "./cards.js";
 
 type Status = "loading" | "ok" | "error";
 interface Slot<T> { status: Status; data: T | null; err: unknown; source: Source | null }
@@ -565,14 +565,16 @@ function cardsView(): string {
     return win(fileName(c.name), c.color,
       `<div class="line"><span class="mid">${esc(c.name)}</span><span class="mid">${pct(c.base)}</span></div>` +
       '<div class="meta">everything else</div>' +
-      `<div class="row"><span class="tag ${c.color}">${esc("limit " + money0(c.limit))}</span></div>` +
+      `<div class="row"><span class="tag ${c.color}">${esc("limit " + money0(c.limit))}</span>` +
+      (c.autopayDay ? `<span class="tag">${esc("autopay on the " + ordinal(c.autopayDay))}</span>` : "") + "</div>" +
+      (c.autopayDay ? `<div class="meta">${esc("next autopay " + lbl(nextAutopay(c.autopayDay, todayStr())) + " · " + rel(nextAutopay(c.autopayDay, todayStr()), todayStr()))}</div>` : "") +
       (rows ? `<ul class="list">${rows}</ul>` : "") +
       c.notes.filter((n) => !/^Everything else/.test(n)).map((n) => `<div class="soft">${esc(n)}</div>`).join("") +
       `<div><a class="link" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">check current rates</a></div>`);
   }).join("");
   const total = CARDS.reduce((n, c) => n + c.limit, 0);
   const limits = win("credit_limits.txt", "pink",
-    `<ul class="list">${CARDS.map((c) => `<li><div class="line"><span><b>${esc(c.short)}</b></span><span class="mid">${esc(money0(c.limit))}</span></div></li>`).join("")}</ul>` +
+    `<ul class="list">${CARDS.map((c) => `<li><div class="line"><span><b>${esc(c.short)}</b></span><span class="mid">${esc(money0(c.limit))}</span></div>${c.autopayDay ? `<span class="meta">${esc("autopay on the " + ordinal(c.autopayDay))}</span>` : ""}</li>`).join("")}</ul>` +
     `<hr><div class="line"><span class="meta">all three together</span><span class="mid">${esc(money0(total))}</span></div>`, true);
   const grid = win("side_by_side.txt", "lilac",
     `<div class="tablewrap"><table class="rates"><thead><tr><th>category</th>${CARDS.map((c) => `<th>${esc(c.short)}</th>`).join("")}</tr></thead><tbody>` +

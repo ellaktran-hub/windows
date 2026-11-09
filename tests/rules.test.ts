@@ -71,3 +71,13 @@ test("coming up, split by kind", () => {
   ];
   assert.deepEqual(R.billsSoon(bills, T).map((b) => b.name), ["Late", "Soon"]);
 });
+
+test("next autopay date", async () => {
+  const { nextAutopay, ordinal } = await import("../src/cards.js");
+  assert.equal(nextAutopay(27, "2026-11-09"), "2026-11-27");
+  assert.equal(nextAutopay(27, "2026-11-27"), "2026-11-27");
+  assert.equal(nextAutopay(2, "2026-11-09"), "2026-12-02");
+  assert.equal(nextAutopay(2, "2026-12-03"), "2027-01-02");
+  assert.equal(nextAutopay(31, "2026-02-10"), "2026-02-28");
+  assert.deepEqual([1, 2, 3, 11, 22, 27].map(ordinal), ["1st", "2nd", "3rd", "11th", "22nd", "27th"]);
+});
