@@ -580,7 +580,7 @@ function cardsView(): string {
       const top = Math.max(...CARDS.map((c) => rateFor(c, cat)));
       return `<tr><td>${esc(cat)}</td>${CARDS.map((c) => { const r = rateFor(c, cat); return r === top ? `<td class="top"><span class="chip">${pct(r)}</span></td>` : `<td>${pct(r)}</td>`; }).join("")}</tr>`;
     }).join("") + "</tbody></table></div>", true);
-  return intro + bestW + cardWins + grid + limits;
+  return intro + grid + bestW + cardWins + limits;
 }
 
 function view(): string {
