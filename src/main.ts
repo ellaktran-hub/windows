@@ -570,7 +570,7 @@ function cardsView(): string {
     `<div class="tablewrap"><table class="rates"><thead><tr><th>category</th>${CARDS.map((c) => `<th>${esc(c.short)}</th>`).join("")}</tr></thead><tbody>` +
     CATEGORIES.map((cat) => {
       const top = Math.max(...CARDS.map((c) => rateFor(c, cat)));
-      return `<tr><td>${esc(cat)}</td>${CARDS.map((c) => { const r = rateFor(c, cat); return `<td${r === top ? ' class="top"' : ""}>${pct(r)}</td>`; }).join("")}</tr>`;
+      return `<tr><td>${esc(cat)}</td>${CARDS.map((c) => { const r = rateFor(c, cat); return r === top ? `<td class="top"><span class="chip">${pct(r)}</span></td>` : `<td>${pct(r)}</td>`; }).join("")}</tr>`;
     }).join("") + "</tbody></table></div>", true);
   return intro + bestW + cardWins + grid;
 }

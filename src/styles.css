@@ -169,11 +169,13 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
   animation: spark 0.6s steps(4, end) forwards; }
 @keyframes spark { from { transform: scale(0.4); opacity: 1; } 70% { opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
 .tablewrap { overflow-x: auto; margin: 0 -4px; }
-table.rates { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.rates th { text-align: left; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 6px 8px; border-bottom: 2px solid var(--ink); }
-table.rates td { padding: 6px; border-bottom: 2px dashed rgba(90, 51, 38, 0.25); }
+table.rates { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: 13px; }
+table.rates th { text-align: left; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 0 6px 4px; border-bottom: 2px solid var(--ink); }
+table.rates td { padding: 7px 6px; background: var(--paper); border-top: 2px solid rgba(90, 51, 38, 0.18); border-bottom: 2px solid rgba(90, 51, 38, 0.18); }
+table.rates td:first-child { border-left: 2px solid rgba(90, 51, 38, 0.18); border-radius: 6px 0 0 6px; }
+table.rates td:last-child { border-right: 2px solid rgba(90, 51, 38, 0.18); border-radius: 0 6px 6px 0; }
 table.rates td + td, table.rates th + th { text-align: right; white-space: nowrap; }
-table.rates td.top { font-weight: 700; background: var(--butter); }
+table.rates td.top .chip { display: inline-block; font-weight: 700; background: var(--butter); border: 2px solid var(--ink); border-radius: 4px; padding: 0 6px; box-shadow: 2px 2px 0 var(--ink); }
 .note { font-size: 13px; background: var(--paper); border: 2px dashed var(--ink); border-radius: 6px; padding: 8px 12px; }
 .note.sample { background: var(--mint); border-style: solid; font-weight: 700; }
 
