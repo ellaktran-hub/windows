@@ -1,9 +1,10 @@
-// Reward rates for the owner's cards, as a quick reference only.
+// Reward rates and credit limits for the owner's cards, as a quick reference only.
+// Credit limits are the owner's own numbers; the monthly rate check never changes them.
 // Rates come from each card's public terms and reviews; card companies change
 // them, so the page links to each official page to check before relying on it.
 
 export interface CardRate { cat: string; rate: number; note?: string }
-export interface Card { id: string; name: string; short: string; color: string; link: string; base: number; rates: CardRate[]; notes: string[] }
+export interface Card { id: string; name: string; short: string; limit: number; color: string; link: string; base: number; rates: CardRate[]; notes: string[] }
 
 export const CATEGORIES = [
   "Dining",
@@ -21,6 +22,7 @@ export const CARDS: Card[] = [
     id: "savor",
     name: "Capital One Savor",
     short: "Savor",
+    limit: 2300,
     color: "peach",
     link: "https://www.capitalone.com/credit-cards/savor/",
     base: 1,
@@ -38,6 +40,7 @@ export const CARDS: Card[] = [
     id: "cfu",
     name: "Chase Freedom Unlimited",
     short: "Freedom",
+    limit: 3000,
     color: "sky",
     link: "https://creditcards.chase.com/cash-back-credit-cards/freedom/unlimited",
     base: 1.5,
@@ -52,6 +55,7 @@ export const CARDS: Card[] = [
     id: "fidelity",
     name: "Fidelity Rewards Visa",
     short: "Fidelity",
+    limit: 12000,
     color: "mint",
     link: "https://www.fidelity.com/go/rewards-visa-signature",
     base: 2,

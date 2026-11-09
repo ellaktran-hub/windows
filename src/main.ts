@@ -64,6 +64,9 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function esc(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
+function money0(n: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+}
 function money(n: number | null): string {
   return typeof n === "number" ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n) : "";
 }
@@ -562,17 +565,22 @@ function cardsView(): string {
     return win(fileName(c.name), c.color,
       `<div class="line"><span class="mid">${esc(c.name)}</span><span class="mid">${pct(c.base)}</span></div>` +
       '<div class="meta">everything else</div>' +
+      `<div class="row"><span class="tag ${c.color}">${esc("limit " + money0(c.limit))}</span></div>` +
       (rows ? `<ul class="list">${rows}</ul>` : "") +
       c.notes.filter((n) => !/^Everything else/.test(n)).map((n) => `<div class="soft">${esc(n)}</div>`).join("") +
       `<div><a class="link" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">check current rates</a></div>`);
   }).join("");
+  const total = CARDS.reduce((n, c) => n + c.limit, 0);
+  const limits = win("credit_limits.txt", "pink",
+    `<ul class="list">${CARDS.map((c) => `<li><div class="line"><span><b>${esc(c.short)}</b></span><span class="mid">${esc(money0(c.limit))}</span></div></li>`).join("")}</ul>` +
+    `<hr><div class="line"><span class="meta">all three together</span><span class="mid">${esc(money0(total))}</span></div>`, true);
   const grid = win("side_by_side.txt", "lilac",
     `<div class="tablewrap"><table class="rates"><thead><tr><th>category</th>${CARDS.map((c) => `<th>${esc(c.short)}</th>`).join("")}</tr></thead><tbody>` +
     CATEGORIES.map((cat) => {
       const top = Math.max(...CARDS.map((c) => rateFor(c, cat)));
       return `<tr><td>${esc(cat)}</td>${CARDS.map((c) => { const r = rateFor(c, cat); return r === top ? `<td class="top"><span class="chip">${pct(r)}</span></td>` : `<td>${pct(r)}</td>`; }).join("")}</tr>`;
     }).join("") + "</tbody></table></div>", true);
-  return intro + bestW + cardWins + grid;
+  return intro + bestW + cardWins + grid + limits;
 }
 
 function view(): string {
