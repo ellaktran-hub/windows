@@ -128,6 +128,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .list li { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .line { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
 .line > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.line > span:last-child { white-space: nowrap; }
 .notes { display: grid; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
 .notes .nh1 { font-family: var(--font-serif); font-size: 26px; line-height: 1.15; margin-top: 6px; }
 .notes .nh2 { font-family: var(--font-serif); font-size: 22px; line-height: 1.2; margin-top: 6px; }
@@ -167,6 +168,12 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
   box-shadow: 0 -10px var(--coral), 0 10px var(--coral), -10px 0 var(--sea), 10px 0 var(--sea), -7px -7px var(--butter), 7px 7px var(--butter), 7px -7px var(--lilac-deep), -7px 7px var(--lilac-deep);
   animation: spark 0.6s steps(4, end) forwards; }
 @keyframes spark { from { transform: scale(0.4); opacity: 1; } 70% { opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
+.tablewrap { overflow-x: auto; margin: 0 -4px; }
+table.rates { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.rates th { text-align: left; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 6px 8px; border-bottom: 2px solid var(--ink); }
+table.rates td { padding: 6px; border-bottom: 2px dashed rgba(90, 51, 38, 0.25); }
+table.rates td + td, table.rates th + th { text-align: right; white-space: nowrap; }
+table.rates td.top { font-weight: 700; background: var(--butter); }
 .note { font-size: 13px; background: var(--paper); border: 2px dashed var(--ink); border-radius: 6px; padding: 8px 12px; }
 .note.sample { background: var(--mint); border-style: solid; font-weight: 700; }
 

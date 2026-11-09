@@ -8,6 +8,7 @@ import type { NoteBlock, ProjectContentResponse, RichBit } from "../shared/types
 import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
 import * as R from "./rules.js";
+import { CARDS, CATEGORIES, bestByCategory, rateFor } from "./cards.js";
 
 type Status = "loading" | "ok" | "error";
 interface Slot<T> { status: Status; data: T | null; err: unknown; source: Source | null }
@@ -27,7 +28,7 @@ type TimeOfDay = "morning" | "afternoon" | "evening";
 const timeOfDay = (h: number): TimeOfDay => (h >= 5 && h < 12 ? "morning" : h >= 12 && h < 17 ? "afternoon" : "evening");
 const EVENING_FROM = 19; // after this hour, Today shows tomorrow.exe first
 const BLOCKS = ["Morning", "Work day", "Lunch", "After work", "Evening"];
-const TABS: Array<[string, string]> = [["today", "today"], ["calendar", "calendar"], ["tasks", "tasks"], ["bills", "bills"], ["projects", "projects"], ["sleep", "sleep"]];
+const TABS: Array<[string, string]> = [["today", "today"], ["calendar", "calendar"], ["tasks", "tasks"], ["bills", "bills"], ["cards", "cards"], ["projects", "projects"], ["sleep", "sleep"]];
 
 const S = {
   tab: "today",
@@ -549,8 +550,33 @@ function loadNotes(id: string) {
   void load(s, async () => { const r = await getJson<ProjectContentResponse>("/api/projects/" + encodeURIComponent(id) + "/content"); return { source: r.source, data: r }; });
 }
 
+// A reference page only: no data is loaded, and nothing here is saved anywhere.
+function cardsView(): string {
+  const pct = (n: number) => (Number.isInteger(n) ? n : n.toFixed(1)) + "%";
+  const best = bestByCategory();
+  const intro = '<div class="status"><span class="meta">which card earns the most · rates can change, so check each card\'s page</span></div>';
+  const bestW = win("best_card_for.txt", "butter",
+    `<ul class="list">${best.map((b) => `<li><div class="line"><span><b>${esc(b.cat)}</b></span><span class="mid">${pct(b.rate)}</span></div><span class="row">${b.cards.map((c) => `<span class="tag ${c.color}">${esc(c.name)}</span>`).join("")}</span></li>`).join("")}</ul>`, true, "star");
+  const cardWins = CARDS.map((c) => {
+    const rows = c.rates.map((r) => `<li><div class="line"><span>${esc(r.cat)}</span><span><b>${pct(r.rate)}</b></span></div>${r.note ? `<span class="meta">${esc(r.note)}</span>` : ""}</li>`).join("");
+    return win(fileName(c.name), c.color,
+      `<div class="line"><span class="mid">${esc(c.name)}</span><span class="mid">${pct(c.base)}</span></div>` +
+      '<div class="meta">everything else</div>' +
+      (rows ? `<ul class="list">${rows}</ul>` : "") +
+      c.notes.filter((n) => !/^Everything else/.test(n)).map((n) => `<div class="soft">${esc(n)}</div>`).join("") +
+      `<div><a class="link" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">check current rates</a></div>`);
+  }).join("");
+  const grid = win("side_by_side.txt", "lilac",
+    `<div class="tablewrap"><table class="rates"><thead><tr><th>category</th>${CARDS.map((c) => `<th>${esc(c.name.replace(/^(Capital One|Chase|Fidelity Rewards) /, ""))}</th>`).join("")}</tr></thead><tbody>` +
+    CATEGORIES.map((cat) => {
+      const top = Math.max(...CARDS.map((c) => rateFor(c, cat)));
+      return `<tr><td>${esc(cat)}</td>${CARDS.map((c) => { const r = rateFor(c, cat); return `<td${r === top ? ' class="top"' : ""}>${pct(r)}</td>`; }).join("")}</tr>`;
+    }).join("") + "</tbody></table></div>", true);
+  return intro + bestW + cardWins + grid;
+}
+
 function view(): string {
-  const v = S.tab === "project" ? projectPageView() : S.tab === "calendar" ? calendarView() : S.tab === "tasks" ? tasksView() : S.tab === "bills" ? billsView() : S.tab === "projects" ? projectsView() : S.tab === "sleep" ? sleepView() : todayView();
+  const v = S.tab === "cards" ? cardsView() : S.tab === "project" ? projectPageView() : S.tab === "calendar" ? calendarView() : S.tab === "tasks" ? tasksView() : S.tab === "bills" ? billsView() : S.tab === "projects" ? projectsView() : S.tab === "sleep" ? sleepView() : todayView();
   return hello() + v + '<div class="foot">thank you for showing up today</div>';
 }
 
