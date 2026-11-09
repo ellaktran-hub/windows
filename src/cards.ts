@@ -3,7 +3,7 @@
 // them, so the page links to each official page to check before relying on it.
 
 export interface CardRate { cat: string; rate: number; note?: string }
-export interface Card { id: string; name: string; color: string; link: string; base: number; rates: CardRate[]; notes: string[] }
+export interface Card { id: string; name: string; short: string; color: string; link: string; base: number; rates: CardRate[]; notes: string[] }
 
 export const CATEGORIES = [
   "Dining",
@@ -20,6 +20,7 @@ export const CARDS: Card[] = [
   {
     id: "savor",
     name: "Capital One Savor",
+    short: "Savor",
     color: "peach",
     link: "https://www.capitalone.com/credit-cards/savor/",
     base: 1,
@@ -36,6 +37,7 @@ export const CARDS: Card[] = [
   {
     id: "cfu",
     name: "Chase Freedom Unlimited",
+    short: "Freedom",
     color: "sky",
     link: "https://creditcards.chase.com/cash-back-credit-cards/freedom/unlimited",
     base: 1.5,
@@ -49,6 +51,7 @@ export const CARDS: Card[] = [
   {
     id: "fidelity",
     name: "Fidelity Rewards Visa",
+    short: "Fidelity",
     color: "mint",
     link: "https://www.fidelity.com/go/rewards-visa-signature",
     base: 2,

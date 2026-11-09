@@ -567,7 +567,7 @@ function cardsView(): string {
       `<div><a class="link" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">check current rates</a></div>`);
   }).join("");
   const grid = win("side_by_side.txt", "lilac",
-    `<div class="tablewrap"><table class="rates"><thead><tr><th>category</th>${CARDS.map((c) => `<th>${esc(c.name.replace(/^(Capital One|Chase|Fidelity Rewards) /, ""))}</th>`).join("")}</tr></thead><tbody>` +
+    `<div class="tablewrap"><table class="rates"><thead><tr><th>category</th>${CARDS.map((c) => `<th>${esc(c.short)}</th>`).join("")}</tr></thead><tbody>` +
     CATEGORIES.map((cat) => {
       const top = Math.max(...CARDS.map((c) => rateFor(c, cat)));
       return `<tr><td>${esc(cat)}</td>${CARDS.map((c) => { const r = rateFor(c, cat); return `<td${r === top ? ' class="top"' : ""}>${pct(r)}</td>`; }).join("")}</tr>`;
