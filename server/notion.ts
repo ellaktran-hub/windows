@@ -292,7 +292,7 @@ export function normBill(p: NotionPage): Bill {
 export interface JobInput {
   company: string; role: string; status: string; applied: string | null; followUp: string | null;
   next: string; contactName: string; contactLink: string | null; postingLink: string | null; notes: string;
-  priority: string; how: string[]; posted: string; lastContacted: string | null;
+  priority: string; how: string[]; posted: string; lastContacted: string | null; setup: string; location: string;
 }
 const rtProp = (v: string) => ({ rich_text: v ? [{ text: { content: v } }] : [] });
 /** Every field is sent, so clearing one in the form clears it in Notion. */
@@ -312,6 +312,8 @@ export function jobProps(j: JobInput): Record<string, unknown> {
     "How I applied": { multi_select: j.how.map((name) => ({ name })) },
     "Posted or not": { select: j.posted ? { name: j.posted } : null },
     "Last contacted": { date: j.lastContacted ? { start: j.lastContacted } : null },
+    "Work setup": { select: j.setup ? { name: j.setup } : null },
+    Location: rtProp(j.location),
   };
 }
 
@@ -353,6 +355,8 @@ export function normJob(p: NotionPage): Job {
     how: multi(prop(p, "How I applied")),
     posted: sel(prop(p, "Posted or not")),
     lastContacted: day(prop(p, "Last contacted")),
+    setup: sel(prop(p, "Work setup")),
+    location: text(prop(p, "Location")),
   };
 }
 

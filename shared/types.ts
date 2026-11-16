@@ -49,6 +49,7 @@ export const JOB_STATUSES = ["Interested", "Applied", "Interviewing", "Offer", "
 export const JOB_PRIORITIES = ["High", "Medium", "Low"] as const;
 export const JOB_HOW = ["Online", "In person", "Internal", "Referral", "Reached out"] as const;
 export const JOB_POSTED = ["Posted", "Not posted"] as const;
+export const JOB_SETUP = ["Remote", "Hybrid", "In person"] as const;
 export interface Job {
   id: string;
   url: string; // the row in Notion
@@ -66,6 +67,8 @@ export interface Job {
   how: string[]; // How I applied
   posted: string; // Posted, Not posted
   lastContacted: string | null; // YYYY-MM-DD, from Notion
+  setup: string; // Remote, Hybrid, In person
+  location: string;
 }
 
 export interface Appointment {

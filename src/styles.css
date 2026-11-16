@@ -195,6 +195,7 @@ table.rates td.top .chip { display: inline-block; font-weight: 700; background: 
 .count.all { border-color: var(--ink); }
 .win.late { border-left: 8px solid var(--coral); }
 .follow, .howrow { display: grid; gap: 4px; }
+.where { font-size: 14px; }
 .tag.prio-high { background: var(--peach); border-color: var(--coral-ink); color: var(--coral-ink); }
 .tag.prio-medium { background: var(--butter); }
 .tag.prio-low { background: var(--mist); }

@@ -11,7 +11,7 @@
 
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
-import { JOB_HOW, JOB_POSTED, JOB_PRIORITIES, JOB_STATUSES } from "../shared/types.js";
+import { JOB_HOW, JOB_POSTED, JOB_PRIORITIES, JOB_SETUP, JOB_STATUSES } from "../shared/types.js";
 import type { CalendarRangeResponse, CalendarResponse, ListResponse, ProjectContentResponse } from "../shared/types.js";
 import { BILL_REPEATS, BILL_TYPES, cleanLink, type JobInput, NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
 import { sampleCalendar, sampleData, sampleNotes } from "./sample.js";
@@ -165,12 +165,15 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     if (posted === null || (posted && !(JOB_POSTED as readonly string[]).includes(posted))) return "posted";
     if (how === null) return "how";
     if (lastContacted === undefined) return "date";
+    const setup = str("setup", 20), location = str("location", 120);
+    if (setup === null || (setup && !(JOB_SETUP as readonly string[]).includes(setup))) return "setup";
+    if (location === null) return "text";
     if (!company) return "company";
     if (role === null || next === null || contactName === null || notes === null) return "text";
     if (status === null || (status && !(JOB_STATUSES as readonly string[]).includes(status))) return "status";
     if (applied === undefined || followUp === undefined) return "date";
     if (contactLink === undefined || postingLink === undefined) return "link";
-    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes, priority, how, posted, lastContacted };
+    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes, priority, how, posted, lastContacted, setup, location };
   }
 
   app.post("/api/jobs", async (c) => {

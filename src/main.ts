@@ -4,7 +4,7 @@
 
 import "./styles.css";
 import { dayNum, addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
-import { JOB_HOW, JOB_POSTED, JOB_PRIORITIES, JOB_STATUSES } from "../shared/types.js";
+import { JOB_HOW, JOB_POSTED, JOB_PRIORITIES, JOB_SETUP, JOB_STATUSES } from "../shared/types.js";
 import type { Appointment, Job, NoteBlock, ProjectContentResponse, RichBit } from "../shared/types.js";
 import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
@@ -611,21 +611,22 @@ function cardsView(): string {
 // Job Applications: read from the Notion database, with forms to add and edit
 // (never delete). Every save goes to Notion and the page re-reads it.
 type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; notes: string;
-  priority: string; posted: string; lastContacted: string; how: string[] };
+  priority: string; posted: string; lastContacted: string; how: string[]; setup: string; location: string };
 function emptyJobDraft(): JobDraft {
   return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", notes: "",
-    priority: "Medium", posted: "", lastContacted: "", how: [] };
+    priority: "Medium", posted: "", lastContacted: "", how: [], setup: "", location: "" };
 }
 function jobForm(title: string): string {
   const d = S.jobDraft, busy = !!S.busy.job;
   const field = (k: Exclude<keyof JobDraft, "how">, label: string, type = "text", extra = "") =>
     `<label for="job-${k}">${label}<input id="job-${k}" data-job="${k}" type="${type}" autocomplete="off"${extra} value="${esc(d[k])}"></label>`;
-  const pick = (k: "status" | "priority" | "posted", label: string, opts: readonly string[]) =>
+  const pick = (k: "status" | "priority" | "posted" | "setup", label: string, opts: readonly string[]) =>
     `<label for="job-${k}">${label}<select id="job-${k}" data-job="${k}"><option value="">none</option>${opts.map((o) => `<option${d[k] === o ? " selected" : ""}>${o}</option>`).join("")}</select></label>`;
   return win(title, "sky",
     '<form data-form="job" novalidate>' +
     field("company", "Company", "text", ' maxlength="120"') + field("role", "Role", "text", ' maxlength="200"') +
     '<div class="fields">' + pick("status", "Status", JOB_STATUSES) + pick("priority", "Priority", JOB_PRIORITIES) + pick("posted", "Posted or not", JOB_POSTED) + "</div>" +
+    '<div class="fields">' + pick("setup", "Work setup", JOB_SETUP) + field("location", "Location", "text", ' maxlength="120" placeholder="like Seaport office"') + "</div>" +
     `<fieldset class="checks"><legend>How I applied</legend>${JOB_HOW.map((h) => `<label class="check"><input type="checkbox" data-jobhow="${esc(h)}"${d.how.includes(h) ? " checked" : ""}>${esc(h)}</label>`).join("")}</fieldset>` +
     '<div class="fields">' + field("applied", "Date applied", "date") + field("followUp", "Follow-up date", "date") + field("lastContacted", "Last contacted", "date") + "</div>" +
     field("next", "Next step", "text", ' maxlength="500"') +
@@ -674,7 +675,8 @@ function jobsView(): string {
     const how = j.how.length ? `<div class="howrow"><span class="meta">how I applied</span><span class="row">${j.how.map((h) => `<span class="tag mint">${esc(h.toLowerCase())}</span>`).join("")}</span></div>` : "";
     const body =
       `<div class="mid">${esc(j.company)}</div>` + (j.role ? `<div class="meta">${esc(j.role)}</div>` : "") +
-      `<div class="row">${tags}</div>` + how +
+      `<div class="row">${tags}</div>` +
+      (j.setup || j.location ? `<div class="where"><span class="meta">where</span> ${esc([j.setup.toLowerCase(), j.location].filter(Boolean).join(" · "))}</div>` : "") + how +
       `<div class="follow"><span class="meta">follow-up</span><span class="row">${followHtml(j, t)}</span></div>` +
       (j.next ? `<div class="stack tight"><span class="meta">next step</span><div class="step">${esc(j.next)}</div></div>` : "") +
       `<div class="facts">` +
@@ -866,7 +868,7 @@ function openJobForm(id: string) {
   S.jobDraft = j ? {
     company: j.company, role: j.role, status: j.status, applied: j.applied || "", followUp: j.followUp || "", next: j.next,
     contactName: j.contactName, contactLink: (j.contactLink || "").replace(/^mailto:/, ""), postingLink: j.postingLink || "", notes: j.notes,
-    priority: j.priority, posted: j.posted, lastContacted: j.lastContacted || "", how: j.how.slice(),
+    priority: j.priority, posted: j.posted, lastContacted: j.lastContacted || "", how: j.how.slice(), setup: j.setup, location: j.location,
   } : emptyJobDraft();
   S.jobEdit = id; render();
   document.getElementById("job-company")?.focus();
@@ -878,7 +880,7 @@ async function saveJob() {
   const payload = {
     company: d.company.trim(), role: d.role.trim(), status: d.status, applied: d.applied || null, followUp: d.followUp || null,
     next: d.next.trim(), contactName: d.contactName.trim(), contactLink: d.contactLink.trim(), postingLink: d.postingLink.trim(), notes: d.notes.trim(),
-    priority: d.priority, posted: d.posted, lastContacted: d.lastContacted || null, how: d.how,
+    priority: d.priority, posted: d.posted, lastContacted: d.lastContacted || null, how: d.how, setup: d.setup, location: d.location.trim(),
   };
   if (!isLive(S.jobs)) { S.jobEdit = ""; render(); toast(SAMPLE_NOTE); return; }
   S.busy.job = true; render();
@@ -980,7 +982,7 @@ app.addEventListener("input", (e) => {
 app.addEventListener("change", (e) => {
   const jt = e.target as HTMLSelectElement;
   const jsel = jt.dataset?.job;
-  if (jsel === "status" || jsel === "priority" || jsel === "posted") S.jobDraft[jsel] = jt.value;
+  if (jsel === "status" || jsel === "priority" || jsel === "posted" || jsel === "setup") S.jobDraft[jsel] = jt.value;
   const hwc = (jt as unknown as HTMLInputElement).dataset?.jobhow;
   if (hwc) { const on = (jt as unknown as HTMLInputElement).checked; S.jobDraft.how = on ? [...new Set([...S.jobDraft.how, hwc])] : S.jobDraft.how.filter((x) => x !== hwc); }
   const t = e.target as HTMLSelectElement;
