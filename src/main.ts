@@ -49,7 +49,6 @@ const S = {
   jobs: slot<Job[]>(), // Job Applications, read only
   jobFilter: "all", // a status, or "all"
   jobSort: "followup" as "status" | "followup",
-  jobOpen: {} as Record<string, boolean>, // rows showing their details
   focusProject: "", // a project to scroll to when the projects tab opens
   openProject: "", // the project whose page is open (#project/<id>)
   notes: {} as Record<string, Slot<ProjectContentResponse>>, // project notes, loaded when a page opens
@@ -399,7 +398,8 @@ function stepLines(next: string): string {
 }
 
 function fileName(name: string): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 28);
+  let slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (slug.length > 28) { const cut = slug.lastIndexOf("_", 28); slug = slug.slice(0, cut > 8 ? cut : 28); } // end on a whole word
   return (slug || "project") + ".txt";
 }
 
@@ -635,26 +635,28 @@ function jobsView(): string {
     '<div class="status"><span class="meta">sort</span><div class="days" role="group" aria-label="Sort by">' +
     chip("jobsort", "followup", "follow-up date", S.jobSort === "followup") + chip("jobsort", "status", "status", S.jobSort === "status") + "</div></div>";
   const shown = R.sortJobs(S.jobFilter === "all" ? all : all.filter((j) => j.status === S.jobFilter), S.jobSort);
-  const rows = shown.map((j) => {
-    const open = !!S.jobOpen[j.id];
-    const links = (j.postingLink ? `<a class="link" href="${esc(j.postingLink)}" target="_blank" rel="noopener noreferrer">posting</a>` : "") +
-      (j.contactLink ? `<a class="link" href="${esc(j.contactLink)}" target="_blank" rel="noopener noreferrer">contact</a>` : "");
-    const main = `<tr class="job${R.followUp(j, t).kind === "overdue" ? " late" : ""}">` +
-      `<td><b>${esc(j.company)}</b>${j.role ? `<div class="meta">${esc(j.role)}</div>` : ""}${j.next ? `<div class="next">next: ${esc(j.next)}</div>` : ""}` +
-      `<div class="row"><button class="btn soft tiny" type="button" data-act="jobmore" data-id="${esc(j.id)}" aria-expanded="${open}">${open ? "less" : "more"}</button></div></td>` +
-      `<td data-label="status">${j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : '<span class="meta">none</span>'}</td>` +
-      `<td data-label="follow-up"><div class="stack tight">${followHtml(j, t)}</div></td>` +
-      `<td data-label="links"><div class="stack tight">${links || '<span class="meta">none</span>'}</div></td></tr>`;
-    const detail = open ? `<tr class="jobdetail"><td colspan="4"><div class="stack tight">` +
+  // One window per application, colored by status.
+  const boxes = shown.map((j) => {
+    const f = R.followUp(j, t);
+    const color = JOB_COLOR[j.status] || "sky";
+    const tags = (j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : "");
+    const body =
+      `<div class="mid">${esc(j.company)}</div>` + (j.role ? `<div class="meta">${esc(j.role)}</div>` : "") +
+      `<div class="row">${tags}</div>` +
+      `<div class="follow"><span class="meta">follow-up</span><span class="row">${followHtml(j, t)}</span></div>` +
+      (j.next ? `<div class="stack tight"><span class="meta">next step</span><div class="step">${esc(j.next)}</div></div>` : "") +
+      `<div class="facts">` +
       `<div><span class="meta">applied</span> ${j.applied ? esc(lbl(j.applied) + " · " + rel(j.applied, t)) : "not yet"}</div>` +
       (j.contactName ? `<div><span class="meta">contact</span> ${esc(j.contactName)}</div>` : "") +
-      (j.notes ? `<div><span class="meta">notes</span> ${esc(j.notes)}</div>` : "") +
-      `<div><a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open this row in Notion</a></div></div></td></tr>` : "";
-    return main + detail;
+      (j.notes ? `<div><span class="meta">notes</span> ${esc(j.notes)}</div>` : "") + "</div>" +
+      `<div class="row">` +
+      (j.postingLink ? `<a class="btn go" href="${esc(j.postingLink)}" target="_blank" rel="noopener noreferrer">job posting</a>` : "") +
+      (j.contactLink ? `<a class="btn go" href="${esc(j.contactLink)}" target="_blank" rel="noopener noreferrer">contact</a>` : "") +
+      `<a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
+    const w = win(fileName(j.company + " " + j.role), color, body);
+    return f.kind === "overdue" ? w.replace('<section class="win"', '<section class="win late"') : w;
   }).join("");
-  const table = win("applications.txt", "butter", shown.length
-    ? `<div class="tablewrap"><table class="jobs"><thead><tr><th>company</th><th>status</th><th>follow-up</th><th>links</th></tr></thead><tbody>${rows}</tbody></table></div>`
-    : `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
+  const table = boxes || win("applications.txt", "butter", `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
   return top + note + countsW + controls + table;
 }
 
@@ -880,7 +882,6 @@ app.addEventListener("click", (e) => {
   else if (a === "unpaid") void setPaid(id, false);
   else if (a === "jobfilter") { S.jobFilter = (JOB_STATUSES as readonly string[]).includes(b.dataset.v || "") ? b.dataset.v! : "all"; render(); }
   else if (a === "jobsort") { S.jobSort = b.dataset.v === "status" ? "status" : "followup"; render(); }
-  else if (a === "jobmore") { S.jobOpen[id] = !S.jobOpen[id]; render(); }
   else if (a === "billform") { S.billForm = !S.billForm; render(); if (S.billForm) document.getElementById("billName")?.focus(); }
   else if (a === "billsview") { S.billsGroup = b.dataset.v === "paid" ? "paid" : "unpaid"; render(); }
   else if (a === "goproject") { e.preventDefault(); goProject(id); }

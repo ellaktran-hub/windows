@@ -193,27 +193,9 @@ table.rates td.top .chip { display: inline-block; font-weight: 700; background: 
 .count { display: grid; justify-items: center; gap: 2px; background: var(--paper); border: 2px solid rgba(90, 51, 38, 0.25); border-radius: 6px; padding: 6px 4px; }
 .count .num { font-family: var(--font-serif); font-size: 26px; line-height: 1.1; }
 .count.all { border-color: var(--ink); }
-table.jobs { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.jobs th { text-align: left; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 0 6px 6px; border-bottom: 2px solid var(--ink); white-space: nowrap; }
-table.jobs td { vertical-align: top; padding: 10px 6px; border-bottom: 2px dashed rgba(90, 51, 38, 0.25); min-width: 0; overflow-wrap: anywhere; }
-table.jobs td:first-child { min-width: 130px; }
-table.jobs tr.late td:first-child { box-shadow: inset 4px 0 0 var(--coral); padding-left: 10px; }
-table.jobs tr.jobdetail td { background: var(--paper); border-bottom: 2px solid rgba(90, 51, 38, 0.25); }
-table.jobs .next { font-size: 13px; margin-top: 2px; }
-table.jobs .stack { justify-items: start; }
-table.jobs .link { display: inline-block; min-height: 28px; line-height: 28px; }
-@media (max-width: 640px) {
-  /* On a phone each application becomes a stacked row with small labels. */
-  table.jobs thead { display: none; }
-  table.jobs, table.jobs tbody, table.jobs tr, table.jobs td { display: block; }
-  table.jobs tr.job { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; padding: 12px 0; border-bottom: 2px dashed rgba(90, 51, 38, 0.25); }
-  table.jobs tr.job td { padding: 0; border: 0; }
-  table.jobs tr.job td:first-child { grid-column: 1 / -1; min-width: 0; }
-  table.jobs tr.job td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; margin-bottom: 4px; }
-  table.jobs tr.late { box-shadow: inset 4px 0 0 var(--coral); padding-left: 12px; }
-  table.jobs tr.late td:first-child { box-shadow: none; padding-left: 0; }
-  table.jobs tr.jobdetail td { padding: 10px 12px; border-radius: 6px; margin-bottom: 4px; }
-}
+.win.late { border-left: 8px solid var(--coral); }
+.follow { display: grid; gap: 4px; }
+.facts { display: grid; gap: 4px; font-size: 14px; padding: 8px 10px; background: var(--paper); border: 2px dashed rgba(90, 51, 38, 0.25); border-radius: 6px; overflow-wrap: anywhere; }
 .btn.tiny { font-size: 11px; padding: 0 8px; min-height: 26px; margin-top: 4px; }
 .note { font-size: 13px; background: var(--paper); border: 2px dashed var(--ink); border-radius: 6px; padding: 8px 12px; }
 .note.sample { background: var(--mint); border-style: solid; font-weight: 700; }
