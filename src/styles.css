@@ -176,6 +176,15 @@ table.rates td:first-child { border-left: 2px solid rgba(90, 51, 38, 0.18); bord
 table.rates td:last-child { border-right: 2px solid rgba(90, 51, 38, 0.18); border-radius: 0 6px 6px 0; }
 table.rates td + td, table.rates th + th { text-align: right; white-space: nowrap; }
 table.rates td.top .chip { display: inline-block; font-weight: 700; background: var(--butter); border: 2px solid var(--ink); border-radius: 4px; padding: 0 6px; box-shadow: 2px 2px 0 var(--ink); }
+.appts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.appt { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: stretch; background: var(--paper); border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; }
+.appt .when { display: grid; place-content: center; text-align: center; font-weight: 700; font-size: 15px; line-height: 1.1; border-right: 2px solid var(--ink); padding: 8px 4px; background: var(--lilac); }
+.appt .when small { display: block; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; }
+.appt .allday { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; }
+.appt .what { display: grid; gap: 4px; padding: 8px 10px; min-width: 0; overflow-wrap: anywhere; }
+.appt .title { font-family: var(--font-serif); font-size: 18px; line-height: 1.2; }
+.appt.c-peach .when { background: var(--peach); } .appt.c-mint .when { background: var(--mint); } .appt.c-sky .when { background: var(--sky); }
+.appt.c-butter .when { background: var(--butter); } .appt.c-pink .when { background: var(--pink); }
 .note { font-size: 13px; background: var(--paper); border: 2px dashed var(--ink); border-radius: 6px; padding: 8px 12px; }
 .note.sample { background: var(--mint); border-style: solid; font-weight: 700; }
 

@@ -4,7 +4,7 @@
 
 import "./styles.css";
 import { dayNum, addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
-import type { NoteBlock, ProjectContentResponse, RichBit } from "../shared/types.js";
+import type { Appointment, NoteBlock, ProjectContentResponse, RichBit } from "../shared/types.js";
 import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
 import * as R from "./rules.js";
@@ -198,6 +198,20 @@ function dayButtons(): string {
   return h + "</div>";
 }
 
+// Each event is a small card: time on the left, title, and which calendar it's from.
+const CAL_COLOR: Record<string, string> = { Appointments: "peach", Personal: "mint", School: "sky", Reminders: "butter", "Harry + Ella": "pink" };
+function apptsHtml(appts: Appointment[], links = false): string {
+  return `<ul class="appts">${appts.map((a) => {
+    const color = CAL_COLOR[a.cal || ""] || "lilac";
+    const allDay = a.time === "all day";
+    const title = links && a.link ? `<a class="plain" href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a>` : esc(a.title);
+    return `<li class="appt c-${color}">` +
+      `<span class="when">${allDay ? '<span class="allday">all day</span>' : esc(a.time.replace(/ (am|pm)$/, "")) + `<small>${esc(a.time.slice(-2))}</small>`}</span>` +
+      `<span class="what"><span class="title">${title}</span>` +
+      `<span class="row">${a.cal ? `<span class="tag ${color}">${esc(a.cal.toLowerCase())}</span>` : ""}${a.until ? `<span class="meta">until ${esc(a.until)}</span>` : ""}</span></span></li>`;
+  }).join("")}</ul>`;
+}
+
 function calBody(c: Calendar, n: number): string {
   if (!c.connected) return '<div class="meta">Work</div><div class="soft">The calendar is not connected yet.</div>' +
     (c.canConnect ? '<div><a class="btn go" href="/api/google/connect">connect calendar</a></div><div class="meta">Read only. It can never change your calendar.</div>' : "");
@@ -209,7 +223,7 @@ function calBody(c: Calendar, n: number): string {
   const tags = c.tags; // all-day Work events, like payday
   if (tags.length) h += `<div class="row">${tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
   h += "<hr>";
-  h += c.appts.length ? `<ul class="list">${c.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span><b>${esc(a.title)}</b></span></li>`).join("")}</ul>` : `<div class="meta">No appointments ${when}</div>`;
+  h += c.appts.length ? apptsHtml(c.appts) : `<div class="meta">No appointments ${when}</div>`;
   if (c.failed) h += '<div class="note">One calendar did not answer, so this may be missing something.</div>';
   return h;
 }
@@ -279,7 +293,7 @@ function eveningWin(): string {
   if (c.data && c.data.connected) {
     h += c.data.work ? `<div class="mid">${esc("Work " + c.data.work)}</div>` : '<div class="soft">No shift scheduled.</div>';
     if (c.data.tags.length) h += `<div class="row">${c.data.tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
-    if (c.data.appts.length) h += `<ul class="list">${c.data.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span><b>${esc(a.title)}</b></span></li>`).join("")}</ul>`;
+    if (c.data.appts.length) h += apptsHtml(c.data.appts);
   } else if (c.status === "loading") h += '<div class="meta">loading</div>';
   const due = (S.tasks.data || []).filter((x) => R.isOpen(x) && x.due === tm).sort(R.byDue);
   if (due.length) h += "<hr>" + `<div class="meta">due tomorrow</div><ul class="donelist plain">${due.slice(0, 3).map((x) => `<li>${esc(x.title)}</li>`).join("")}</ul>` + (due.length > 3 ? `<div class="meta">and ${due.length - 3} more on the tasks tab</div>` : "");
@@ -451,7 +465,7 @@ function calendarView(): string {
     h += c.work ? `<div class="mid">${esc("Work " + c.work)}</div>` : '<div class="soft">No shift scheduled.</div>';
     if (c.tags.length) h += `<div class="row">${c.tags.map((x) => `<span class="tag butter">${esc(x)}</span>`).join("")}</div>`;
     h += c.appts.length
-      ? `<ul class="list">${c.appts.map((a) => `<li><span class="meta">${esc(a.time)}</span><span>${a.link ? `<a class="plain" href="${esc(a.link)}" target="_blank" rel="noopener noreferrer"><b>${esc(a.title)}</b></a>` : `<b>${esc(a.title)}</b>`}</span></li>`).join("")}</ul>`
+      ? apptsHtml(c.appts, true)
       : `<div class="meta">No appointments</div>`;
     const [y, m, dd] = day.split("-").map(Number);
     h += `<div><a class="link" href="https://calendar.google.com/calendar/r/day/${y}/${m}/${dd}" target="_blank" rel="noopener noreferrer">open in Google Calendar</a></div>`;

@@ -146,7 +146,8 @@ export async function readRange(cfg: GoogleConfig, start: string, days: number, 
         const a = acc[d]; if (!a) continue;
         if (r.value.cal === "Work") { a.starts.push(ev.start.dateTime); a.ends.push(ev.end?.dateTime || ev.start.dateTime); }
         else if (r.value.cal === "No Work") a.noWork.push(ev.summary);
-        else a.appts.push({ sort: ev.start.dateTime, time: fmtTime(ev.start.dateTime), title: ev.summary, ...(link ? { link } : {}) });
+        else a.appts.push({ sort: ev.start.dateTime, time: fmtTime(ev.start.dateTime), title: ev.summary, cal: r.value.cal,
+          ...(ev.end?.dateTime && dayOf(ev.end.dateTime) === d ? { until: fmtTime(ev.end.dateTime) } : {}), ...(link ? { link } : {}) });
       } else {
         const s0 = ev.start.date || "", e0 = ev.end?.date || addDays(s0, 1);
         for (const d of dayList) {
@@ -154,7 +155,7 @@ export async function readRange(cfg: GoogleConfig, start: string, days: number, 
           const a = acc[d];
           if (r.value.cal === "Work") a.tags.push(ev.summary);
           else if (r.value.cal === "No Work") a.noWork.push(ev.summary);
-          else a.appts.push({ sort: "0", time: "all day", title: ev.summary, ...(link ? { link } : {}) });
+          else a.appts.push({ sort: "0", time: "all day", title: ev.summary, cal: r.value.cal, ...(link ? { link } : {}) });
         }
       }
     }

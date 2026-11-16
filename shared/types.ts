@@ -50,6 +50,8 @@ export interface Appointment {
   time: string;
   title: string;
   link?: string; // the event in Google Calendar, for editing there
+  cal?: string; // which calendar it came from, like "Personal"
+  until?: string; // end time, for timed events
 }
 
 export type Calendar =
