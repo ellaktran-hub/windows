@@ -650,8 +650,8 @@ function followHtml(j: Job, t: string): string {
 }
 function jobsView(): string {
   const t = todayStr();
-  const top = `<div class="status">${S.jobEdit === "new" ? "" : '<button class="btn add" type="button" data-act="jobnew">add an application</button>'}<a class="btn go" href="${JOBS_NOTION}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>` +
-    (S.jobEdit === "new" ? jobForm("new_application.exe") : "");
+  const top = `<div class="status">${S.jobEdit === "new" ? "" : '<button class="btn add" type="button" data-act="jobnew">add a job</button>'}<a class="btn go" href="${JOBS_NOTION}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>` +
+    (S.jobEdit === "new" ? jobForm("new_job.exe") : "");
   if (!S.jobs.data) return top + win("applications.txt", "butter", sect(S.jobs, () => ""), true);
   const all = S.jobs.data;
   const note = S.jobs.status === "error" ? `<div class="note wide">${esc(errText(S.jobs.err, "Notion"))} Showing the last copy.</div>` : "";
