@@ -1,3 +1,4 @@
+import { JOB_STATUSES, type Job } from "../shared/types.js";
 // The planner's rules, kept apart from the screen code so they can be tested.
 
 import { addDays, dayNum, lbl } from "../shared/dates.js";
@@ -129,4 +130,33 @@ export function nightsLogged(rows: SleepEntry[], t: string): number {
 export function hasNight(rows: SleepEntry[], night: string): boolean {
   const k = night.trim().toLowerCase();
   return rows.some((r) => r.night.trim().toLowerCase() === k);
+}
+
+/* ---------- job applications ---------- */
+
+const CLOSED = new Set(["Rejected", "Withdrawn"]);
+export type FollowKind = "overdue" | "today" | "soon" | "later" | "none" | "closed";
+
+/** How a follow-up date should be marked. Closed applications are never flagged. */
+export function followUp(j: Job, t: string): { kind: FollowKind; days: number } {
+  if (!j.followUp) return { kind: "none", days: 0 };
+  const n = dayNum(j.followUp) - dayNum(t);
+  if (CLOSED.has(j.status)) return { kind: "closed", days: n };
+  return { kind: n < 0 ? "overdue" : n === 0 ? "today" : n <= 7 ? "soon" : "later", days: n };
+}
+
+const statusRank = (s: string) => { const i = (JOB_STATUSES as readonly string[]).indexOf(s); return i < 0 ? JOB_STATUSES.length : i; };
+const byFollow = (a: Job, b: Job) => (a.followUp || "9999").localeCompare(b.followUp || "9999");
+const byName = (a: Job, b: Job) => a.company.localeCompare(b.company) || a.role.localeCompare(b.role);
+
+export function sortJobs(jobs: Job[], by: "status" | "followup"): Job[] {
+  return jobs.slice().sort((a, b) => by === "status"
+    ? statusRank(a.status) - statusRank(b.status) || byFollow(a, b) || byName(a, b)
+    : Number(CLOSED.has(a.status)) - Number(CLOSED.has(b.status)) || byFollow(a, b) || statusRank(a.status) - statusRank(b.status) || byName(a, b));
+}
+
+export function jobCounts(jobs: Job[]): Record<string, number> {
+  const out: Record<string, number> = Object.fromEntries(JOB_STATUSES.map((s) => [s, 0]));
+  for (const j of jobs) if (j.status in out) out[j.status]++;
+  return out;
 }

@@ -6,7 +6,7 @@
 // entry, new bill, and a bill's Paid box (which only ticks the box; it
 // never pays anything). There is no delete, archive, or trash call here.
 
-import type { Bill, NoteBlock, Project, RichBit, SleepEntry, Task } from "../shared/types.js";
+import type { Bill, Job, NoteBlock, Project, RichBit, SleepEntry, Task } from "../shared/types.js";
 
 export const NOTION_VERSION = "2026-03-11";
 export const NOTION_BASE = "https://api.notion.com/v1";
@@ -18,6 +18,7 @@ export const DS = {
   projects: "03280a77-83cc-40d1-9465-5340eff0797f",
   bills: "6ec82b3f-4d3d-4783-9b71-1c049e3cdb95",
   sleep: "d47b77d7-18a4-4b1d-9a9d-63b24a309376",
+  jobs: "41a50e78-d6d4-81a6-9cf4-000b2faa7369",
 } as const;
 
 /** A failure with a short code the page knows how to explain calmly. */
@@ -123,6 +124,10 @@ export class NotionReader {
   }
   async bills(): Promise<Bill[]> {
     return (await this.query(DS.bills)).map(normBill);
+  }
+  /** Job Applications, read only. */
+  async jobs(): Promise<Job[]> {
+    return (await this.query(DS.jobs)).map(normJob);
   }
   async sleep(): Promise<SleepEntry[]> {
     const rows = await this.query(DS.sleep, { sorts: [{ timestamp: "created_time", direction: "descending" }] });
@@ -266,6 +271,29 @@ export function normBill(p: NotionPage): Bill {
     due: day(prop(p, "Due")),
   };
 }
+/** A link property, kept only when it is a normal web address. */
+export const webLink = (v: any): string | null => {
+  const u = v?.type === "url" && typeof v.url === "string" ? v.url.trim() : "";
+  if (!u) return null;
+  try { const x = new URL(/^[a-z]+:/i.test(u) ? u : "https://" + u); return x.protocol === "https:" || x.protocol === "http:" ? x.toString() : null; }
+  catch { return null; }
+};
+export function normJob(p: NotionPage): Job {
+  return {
+    id: idOf(p.id), url: p.url,
+    company: text(prop(p, "Company")) || "Untitled",
+    role: text(prop(p, "Role")),
+    status: sel(prop(p, "Status")),
+    applied: day(prop(p, "Date applied")),
+    followUp: day(prop(p, "Follow-up date")),
+    next: text(prop(p, "Next step")),
+    contactName: text(prop(p, "Contact name")),
+    contactLink: webLink(prop(p, "Contact link")),
+    postingLink: webLink(prop(p, "Job posting link")),
+    notes: text(prop(p, "Notes")),
+  };
+}
+
 export function normSleep(p: NotionPage): SleepEntry {
   return {
     id: idOf(p.id),

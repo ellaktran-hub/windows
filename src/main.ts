@@ -4,7 +4,8 @@
 
 import "./styles.css";
 import { dayNum, addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
-import type { Appointment, NoteBlock, ProjectContentResponse, RichBit } from "../shared/types.js";
+import { JOB_STATUSES } from "../shared/types.js";
+import type { Appointment, Job, NoteBlock, ProjectContentResponse, RichBit } from "../shared/types.js";
 import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
 import * as R from "./rules.js";
@@ -28,7 +29,7 @@ type TimeOfDay = "morning" | "afternoon" | "evening";
 const timeOfDay = (h: number): TimeOfDay => (h >= 5 && h < 12 ? "morning" : h >= 12 && h < 17 ? "afternoon" : "evening");
 const EVENING_FROM = 19; // after this hour, Today shows tomorrow.exe first
 const BLOCKS = ["Morning", "Work day", "Lunch", "After work", "Evening"];
-const TABS: Array<[string, string]> = [["today", "today"], ["calendar", "calendar"], ["tasks", "tasks"], ["bills", "bills"], ["cards", "cards"], ["projects", "projects"], ["sleep", "sleep"]];
+const TABS: Array<[string, string]> = [["today", "today"], ["calendar", "calendar"], ["tasks", "tasks"], ["bills", "bills"], ["cards", "cards"], ["jobs", "jobs"], ["projects", "projects"], ["sleep", "sleep"]];
 
 const S = {
   tab: "today",
@@ -45,6 +46,10 @@ const S = {
   billForm: false, // the add-a-bill form is open
   confirmPaid: "", // the bill waiting for its second "mark paid" tap
   doneToday: slot<Task[]>(), // tasks finished today, from Notion
+  jobs: slot<Job[]>(), // Job Applications, read only
+  jobFilter: "all", // a status, or "all"
+  jobSort: "followup" as "status" | "followup",
+  jobOpen: {} as Record<string, boolean>, // rows showing their details
   focusProject: "", // a project to scroll to when the projects tab opens
   openProject: "", // the project whose page is open (#project/<id>)
   notes: {} as Record<string, Slot<ProjectContentResponse>>, // project notes, loaded when a page opens
@@ -124,6 +129,7 @@ async function refreshAll() {
     load(S.sleep, list<SleepEntry>("/api/sleep")),
     load(S.cal, calFetch(0)),
     load(S.doneToday, list<Task>("/api/tasks/done-today")),
+    load(S.jobs, list<Job>("/api/jobs")),
     ...(hourNow() >= EVENING_FROM && S.calDay !== 1 ? [load(calSlot(1), calFetch(1))] : []),
     ...(S.calDay ? [load(calSlot(S.calDay), calFetch(S.calDay))] : []),
   ]);
@@ -600,8 +606,60 @@ function cardsView(): string {
   return intro + grid + bestW + cardWins + limits;
 }
 
+// Job Applications: read only. Everything here comes from the Notion database;
+// changes are made in Notion.
+const JOBS_NOTION = "https://www.notion.so/41a50e78d6d481878d3fefdcc714f46d";
+const JOB_COLOR: Record<string, string> = { Interested: "sky", Applied: "butter", Interviewing: "lilac", Offer: "mint", Rejected: "", Withdrawn: "" };
+function followHtml(j: Job, t: string): string {
+  const f = R.followUp(j, t);
+  if (f.kind === "none") return '<span class="meta">none</span>';
+  const date = esc(lbl(j.followUp!));
+  if (f.kind === "overdue") return `<span class="tag peach">overdue</span><span class="meta">${date} · ${esc(rel(j.followUp!, t))}</span>`;
+  if (f.kind === "today") return `<span class="tag butter">today</span>`;
+  if (f.kind === "soon") return `<span class="tag mint">${esc(rel(j.followUp!, t))}</span><span class="meta">${date}</span>`;
+  return `<span class="meta">${date}</span>`;
+}
+function jobsView(): string {
+  const t = todayStr();
+  const top = `<div class="status"><span class="meta">read only · edit in Notion</span><a class="btn go" href="${JOBS_NOTION}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
+  if (!S.jobs.data) return top + win("applications.txt", "butter", sect(S.jobs, () => ""), true);
+  const all = S.jobs.data;
+  const note = S.jobs.status === "error" ? `<div class="note wide">${esc(errText(S.jobs.err, "Notion"))} Showing the last copy.</div>` : "";
+  const counts = R.jobCounts(all);
+  const countsW = win("counts.txt", "lilac",
+    `<div class="counts">${JOB_STATUSES.map((st) => `<div class="count"><span class="num">${counts[st]}</span><span class="meta">${esc(st.toLowerCase())}</span></div>`).join("")}` +
+    `<div class="count all"><span class="num">${all.length}</span><span class="meta">all</span></div></div>`, true);
+  const chip = (act: string, v: string, label: string, on: boolean) => `<button class="day" type="button" data-act="${act}" data-v="${esc(v)}" aria-pressed="${on}">${esc(label)}</button>`;
+  const controls = '<div class="status"><div class="days" role="group" aria-label="Show">' +
+    chip("jobfilter", "all", "all", S.jobFilter === "all") + JOB_STATUSES.map((s) => chip("jobfilter", s, s.toLowerCase(), S.jobFilter === s)).join("") + "</div></div>" +
+    '<div class="status"><span class="meta">sort</span><div class="days" role="group" aria-label="Sort by">' +
+    chip("jobsort", "followup", "follow-up date", S.jobSort === "followup") + chip("jobsort", "status", "status", S.jobSort === "status") + "</div></div>";
+  const shown = R.sortJobs(S.jobFilter === "all" ? all : all.filter((j) => j.status === S.jobFilter), S.jobSort);
+  const rows = shown.map((j) => {
+    const open = !!S.jobOpen[j.id];
+    const links = (j.postingLink ? `<a class="link" href="${esc(j.postingLink)}" target="_blank" rel="noopener noreferrer">posting</a>` : "") +
+      (j.contactLink ? `<a class="link" href="${esc(j.contactLink)}" target="_blank" rel="noopener noreferrer">contact</a>` : "");
+    const main = `<tr class="job${R.followUp(j, t).kind === "overdue" ? " late" : ""}">` +
+      `<td><b>${esc(j.company)}</b>${j.role ? `<div class="meta">${esc(j.role)}</div>` : ""}${j.next ? `<div class="next">next: ${esc(j.next)}</div>` : ""}` +
+      `<div class="row"><button class="btn soft tiny" type="button" data-act="jobmore" data-id="${esc(j.id)}" aria-expanded="${open}">${open ? "less" : "more"}</button></div></td>` +
+      `<td data-label="status">${j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : '<span class="meta">none</span>'}</td>` +
+      `<td data-label="follow-up"><div class="stack tight">${followHtml(j, t)}</div></td>` +
+      `<td data-label="links"><div class="stack tight">${links || '<span class="meta">none</span>'}</div></td></tr>`;
+    const detail = open ? `<tr class="jobdetail"><td colspan="4"><div class="stack tight">` +
+      `<div><span class="meta">applied</span> ${j.applied ? esc(lbl(j.applied) + " · " + rel(j.applied, t)) : "not yet"}</div>` +
+      (j.contactName ? `<div><span class="meta">contact</span> ${esc(j.contactName)}</div>` : "") +
+      (j.notes ? `<div><span class="meta">notes</span> ${esc(j.notes)}</div>` : "") +
+      `<div><a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open this row in Notion</a></div></div></td></tr>` : "";
+    return main + detail;
+  }).join("");
+  const table = win("applications.txt", "butter", shown.length
+    ? `<div class="tablewrap"><table class="jobs"><thead><tr><th>company</th><th>status</th><th>follow-up</th><th>links</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
+  return top + note + countsW + controls + table;
+}
+
 function view(): string {
-  const v = S.tab === "cards" ? cardsView() : S.tab === "project" ? projectPageView() : S.tab === "calendar" ? calendarView() : S.tab === "tasks" ? tasksView() : S.tab === "bills" ? billsView() : S.tab === "projects" ? projectsView() : S.tab === "sleep" ? sleepView() : todayView();
+  const v = S.tab === "jobs" ? jobsView() : S.tab === "cards" ? cardsView() : S.tab === "project" ? projectPageView() : S.tab === "calendar" ? calendarView() : S.tab === "tasks" ? tasksView() : S.tab === "bills" ? billsView() : S.tab === "projects" ? projectsView() : S.tab === "sleep" ? sleepView() : todayView();
   return hello() + v + '<div class="foot">thank you for showing up today</div>';
 }
 
@@ -820,6 +878,9 @@ app.addEventListener("click", (e) => {
   else if (a === "week") { S.weekOpen = !S.weekOpen; render(); }
   else if (a === "paid") void setPaid(id, true);
   else if (a === "unpaid") void setPaid(id, false);
+  else if (a === "jobfilter") { S.jobFilter = (JOB_STATUSES as readonly string[]).includes(b.dataset.v || "") ? b.dataset.v! : "all"; render(); }
+  else if (a === "jobsort") { S.jobSort = b.dataset.v === "status" ? "status" : "followup"; render(); }
+  else if (a === "jobmore") { S.jobOpen[id] = !S.jobOpen[id]; render(); }
   else if (a === "billform") { S.billForm = !S.billForm; render(); if (S.billForm) document.getElementById("billName")?.focus(); }
   else if (a === "billsview") { S.billsGroup = b.dataset.v === "paid" ? "paid" : "unpaid"; render(); }
   else if (a === "goproject") { e.preventDefault(); goProject(id); }

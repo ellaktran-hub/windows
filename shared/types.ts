@@ -45,6 +45,22 @@ export interface SleepEntry {
   logged: string; // ISO time the row was created
 }
 
+export const JOB_STATUSES = ["Interested", "Applied", "Interviewing", "Offer", "Rejected", "Withdrawn"] as const;
+export interface Job {
+  id: string;
+  url: string; // the row in Notion
+  company: string;
+  role: string;
+  status: string;
+  applied: string | null; // YYYY-MM-DD, from Notion
+  followUp: string | null; // YYYY-MM-DD, from Notion
+  next: string;
+  contactName: string;
+  contactLink: string | null; // http(s) only
+  postingLink: string | null; // http(s) only
+  notes: string;
+}
+
 export interface Appointment {
   sort: string;
   time: string;

@@ -28,7 +28,7 @@ export interface AppOptions<E extends object> {
   google: (c: Context<{ Bindings: E }>) => GoogleConfig;
 }
 
-type Key = "tasks" | "projects" | "bills" | "sleep";
+type Key = "tasks" | "projects" | "bills" | "sleep" | "jobs";
 
 export const CSP = {
   defaultSrc: ["'self'"],
@@ -227,6 +227,7 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
   app.get("/api/projects", list("projects"));
   app.get("/api/bills", list("bills"));
   app.get("/api/sleep", list("sleep"));
+  app.get("/api/jobs", list("jobs")); // read only: there are no job write routes
   app.get("/api/calendar", async (c) => {
     const d = await demo(c);
     if (d instanceof Response) return d;

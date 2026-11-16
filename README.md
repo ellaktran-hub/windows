@@ -49,6 +49,12 @@ Before signing up, check https://www.cloudflare.com/plans/developer-platform/ an
 
 Every push to `main` deploys a new version automatically, through the GitHub Action.
 
+## Job Applications (read only)
+
+The jobs tab reads the "Job Applications" database in the Life planner. Its properties are Company (title), Role, Status (Interested, Applied, Interviewing, Offer, Rejected, Withdrawn), Date applied, Follow-up date, Next step, Contact name, Contact link, Job posting link, and Notes. The app only reads it. Add and edit applications in Notion.
+
+Like the other databases, it must be shared with the integration: open the integration at https://www.notion.so/profile/integrations, then Access, and add Job Applications.
+
 ## Connect Google Calendar (one time, read only)
 
 1. At https://console.cloud.google.com, make a project called "Home Window" and enable the Google Calendar API.

@@ -3,7 +3,7 @@
 // file is marked source: "sample" and the page shows a clear sample note.
 
 import { addDays, lbl, todayStr } from "../shared/dates.js";
-import type { Bill, Calendar, NoteBlock, Project, SleepEntry, Task } from "../shared/types.js";
+import type { Bill, Calendar, Job, NoteBlock, Project, SleepEntry, Task } from "../shared/types.js";
 
 export function sampleData() {
   const t = todayStr();
@@ -44,7 +44,16 @@ export function sampleData() {
     { id: "s5", night: lbl(d(-6)), bed: "1am", wake: "8am", hours: 7, logged: at(-5, -2) },
   ];
 
-  return { tasks, projects, bills, sleep };
+  const job = (o: Partial<Job> & { id: string; company: string; status: string }): Job => ({
+    url: url(o.id), role: "", applied: null, followUp: null, next: "", contactName: "", contactLink: null, postingLink: null, notes: "", ...o,
+  });
+  const jobs: Job[] = [
+    job({ id: "j1", company: "Sample: Maple Co", role: "Marketing intern", status: "Applied", applied: d(-12), followUp: d(-2), next: "Send a short follow-up note", contactName: "Sam (recruiter)", contactLink: "https://www.linkedin.com/", postingLink: "https://example.com/jobs/1" }),
+    job({ id: "j2", company: "Sample: Birch Labs", role: "Operations intern", status: "Interviewing", applied: d(-20), followUp: d(3), next: "Prepare for second interview", postingLink: "https://example.com/jobs/2", notes: "Panel of three people." }),
+    job({ id: "j3", company: "Sample: Cedar Group", role: "Sales intern", status: "Interested", followUp: d(0), next: "Ask about openings" }),
+    job({ id: "j4", company: "Sample: Elm Studio", role: "Design assistant", status: "Rejected", applied: d(-40), followUp: d(-10) }),
+  ];
+  return { tasks, projects, bills, sleep, jobs };
 }
 
 /** A sample calendar for a day, only used when nothing real is connected. */
