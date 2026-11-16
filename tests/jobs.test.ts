@@ -45,8 +45,8 @@ test("sorting and counts", () => {
   ];
   assert.deepEqual(R.sortJobs(jobs, "status").map((j) => j.company), ["B", "D", "A", "C"]);
   assert.deepEqual(R.sortJobs(jobs, "followup").map((j) => j.company), ["B", "A", "D", "C"], "closed ones last, no date after dated");
-  const pr = [job({ company: "P1", priority: "Low", followUp: "2026-11-17" }), job({ company: "P2", priority: "High" }), job({ company: "P3", priority: "High", status: "Rejected" }), job({ company: "P4" })];
-  assert.deepEqual(R.sortJobs(pr, "priority").map((j) => j.company), ["P2", "P1", "P4", "P3"], "high first, closed last");
+  const pr = [job({ company: "P1", priority: "Low", followUp: "2026-11-17" }), job({ company: "P2", priority: "High" }), job({ company: "P3", priority: "High", status: "Rejected" }), job({ company: "P4" }), job({ company: "P5", priority: "Top", followUp: "2026-12-30" })];
+  assert.deepEqual(R.sortJobs(pr, "priority").map((j) => j.company), ["P5", "P2", "P1", "P4", "P3"], "top, then high, closed last");
   assert.deepEqual(R.jobCounts(jobs), { Interested: 1, Applied: 1, Interviewing: 1, Offer: 0, Rejected: 1, Withdrawn: 0 });
 });
 

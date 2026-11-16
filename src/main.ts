@@ -669,7 +669,7 @@ function jobsView(): string {
   const boxes = shown.map((j) => {
     const f = R.followUp(j, t);
     const color = JOB_COLOR[j.status] || "sky";
-    const tags = (j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${esc(j.priority.toLowerCase())} priority</span>` : "") +
+    const tags = (j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${j.priority === "Top" ? "top priority" : esc(j.priority.toLowerCase()) + " priority"}</span>` : "") +
       (j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : "") +
       (j.posted ? `<span class="tag">${esc(j.posted.toLowerCase())}</span>` : "");
     const how = j.how.length ? `<div class="howrow"><span class="meta">how I applied</span><span class="row">${j.how.map((h) => `<span class="tag mint">${esc(h.toLowerCase())}</span>`).join("")}</span></div>` : "";
@@ -690,7 +690,7 @@ function jobsView(): string {
       `<a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
     if (S.jobEdit === j.id) return jobForm("edit_" + fileName(j.company + " " + j.role));
     const w = win(fileName(j.company + " " + j.role), color, body.replace(/<a class="link" href="[^"]*" target="_blank" rel="noopener noreferrer">open in Notion<\/a><\/div>$/,
-      `<button class="btn soft" type="button" data-act="jobedit" data-id="${esc(j.id)}">edit</button>$&`), false, j.priority === "High" ? "star" : "");
+      `<button class="btn soft" type="button" data-act="jobedit" data-id="${esc(j.id)}">edit</button>$&`), false, j.priority === "Top" || j.priority === "High" ? "star" : "");
     return f.kind === "overdue" ? w.replace('<section class="win"', '<section class="win late"') : w;
   }).join("");
   const table = boxes || win("applications.txt", "butter", `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
