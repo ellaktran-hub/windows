@@ -638,6 +638,8 @@ function jobForm(title: string): string {
 }
 
 const JOBS_NOTION = "https://www.notion.so/41a50e78d6d481878d3fefdcc714f46d";
+// Title bar colors where they differ from the status tag colors.
+const JOB_BAR: Record<string, string> = { Applied: "pink" };
 const JOB_COLOR: Record<string, string> = { Interested: "sky", Applied: "butter", Interviewing: "lilac", Offer: "mint", Rejected: "", Withdrawn: "" };
 function followHtml(j: Job, t: string): string {
   const f = R.followUp(j, t);
@@ -668,7 +670,7 @@ function jobsView(): string {
   // One window per application, colored by status.
   const boxes = shown.map((j) => {
     const f = R.followUp(j, t);
-    const color = JOB_COLOR[j.status] || "sky";
+    const color = JOB_BAR[j.status] || JOB_COLOR[j.status] || "sky";
     const tags = (j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${j.priority === "Top" ? "top priority" : esc(j.priority.toLowerCase()) + " priority"}</span>` : "") +
       (j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : "") +
       (j.posted ? `<span class="tag">${esc(j.posted.toLowerCase())}</span>` : "");
