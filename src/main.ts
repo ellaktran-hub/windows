@@ -694,7 +694,7 @@ function jobsView(): string {
     return f.kind === "overdue" ? w.replace('<section class="win"', '<section class="win late"') : w;
   }).join("");
   const table = boxes || win("applications.txt", "butter", `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
-  return top + note + countsW + controls + table;
+  return note + countsW + top + controls + table;
 }
 
 function view(): string {
