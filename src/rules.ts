@@ -1,4 +1,4 @@
-import { JOB_STATUSES, type Job } from "../shared/types.js";
+import { JOB_PRIORITIES, JOB_STATUSES, type Job } from "../shared/types.js";
 // The planner's rules, kept apart from the screen code so they can be tested.
 
 import { addDays, dayNum, lbl } from "../shared/dates.js";
@@ -149,7 +149,11 @@ const statusRank = (s: string) => { const i = (JOB_STATUSES as readonly string[]
 const byFollow = (a: Job, b: Job) => (a.followUp || "9999").localeCompare(b.followUp || "9999");
 const byName = (a: Job, b: Job) => a.company.localeCompare(b.company) || a.role.localeCompare(b.role);
 
-export function sortJobs(jobs: Job[], by: "status" | "followup"): Job[] {
+const prioRank = (p: string) => { const i = (JOB_PRIORITIES as readonly string[]).indexOf(p); return i < 0 ? JOB_PRIORITIES.length : i; };
+
+export function sortJobs(jobs: Job[], by: "priority" | "status" | "followup"): Job[] {
+  if (by === "priority") return jobs.slice().sort((a, b) =>
+    Number(CLOSED.has(a.status)) - Number(CLOSED.has(b.status)) || prioRank(a.priority) - prioRank(b.priority) || byFollow(a, b) || byName(a, b));
   return jobs.slice().sort((a, b) => by === "status"
     ? statusRank(a.status) - statusRank(b.status) || byFollow(a, b) || byName(a, b)
     : Number(CLOSED.has(a.status)) - Number(CLOSED.has(b.status)) || byFollow(a, b) || statusRank(a.status) - statusRank(b.status) || byName(a, b));

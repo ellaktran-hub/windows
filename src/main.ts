@@ -4,7 +4,7 @@
 
 import "./styles.css";
 import { dayNum, addDays, fmtTime, hourNow, hoursBetween, lbl, rel, todayStr, weekday } from "../shared/dates.js";
-import { JOB_STATUSES } from "../shared/types.js";
+import { JOB_HOW, JOB_POSTED, JOB_PRIORITIES, JOB_STATUSES } from "../shared/types.js";
 import type { Appointment, Job, NoteBlock, ProjectContentResponse, RichBit } from "../shared/types.js";
 import type { Bill, CalendarRangeResponse, CalendarResponse, ListResponse, Project, SleepEntry, Source, Task, Calendar } from "../shared/types.js";
 import { errText, getJson, postJson } from "./api.js";
@@ -48,7 +48,7 @@ const S = {
   doneToday: slot<Task[]>(), // tasks finished today, from Notion
   jobs: slot<Job[]>(), // Job Applications, read only
   jobFilter: "all", // a status, or "all"
-  jobSort: "followup" as "status" | "followup",
+  jobSort: "priority" as "priority" | "status" | "followup",
   jobEdit: "", // "" when no form is open, "new" for a new application, or the id being edited
   jobDraft: emptyJobDraft(),
   focusProject: "", // a project to scroll to when the projects tab opens
@@ -610,20 +610,24 @@ function cardsView(): string {
 
 // Job Applications: read from the Notion database, with forms to add and edit
 // (never delete). Every save goes to Notion and the page re-reads it.
-type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; notes: string };
+type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; notes: string;
+  priority: string; posted: string; lastContacted: string; how: string[] };
 function emptyJobDraft(): JobDraft {
-  return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", notes: "" };
+  return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", notes: "",
+    priority: "Medium", posted: "", lastContacted: "", how: [] };
 }
 function jobForm(title: string): string {
   const d = S.jobDraft, busy = !!S.busy.job;
-  const field = (k: keyof JobDraft, label: string, type = "text", extra = "") =>
+  const field = (k: Exclude<keyof JobDraft, "how">, label: string, type = "text", extra = "") =>
     `<label for="job-${k}">${label}<input id="job-${k}" data-job="${k}" type="${type}" autocomplete="off"${extra} value="${esc(d[k])}"></label>`;
+  const pick = (k: "status" | "priority" | "posted", label: string, opts: readonly string[]) =>
+    `<label for="job-${k}">${label}<select id="job-${k}" data-job="${k}"><option value="">none</option>${opts.map((o) => `<option${d[k] === o ? " selected" : ""}>${o}</option>`).join("")}</select></label>`;
   return win(title, "sky",
     '<form data-form="job" novalidate>' +
     field("company", "Company", "text", ' maxlength="120"') + field("role", "Role", "text", ' maxlength="200"') +
-    '<div class="fields">' +
-    `<label for="job-status">Status<select id="job-status" data-job="status"><option value="">none</option>${JOB_STATUSES.map((st) => `<option${d.status === st ? " selected" : ""}>${st}</option>`).join("")}</select></label>` +
-    field("applied", "Date applied", "date") + field("followUp", "Follow-up date", "date") + "</div>" +
+    '<div class="fields">' + pick("status", "Status", JOB_STATUSES) + pick("priority", "Priority", JOB_PRIORITIES) + pick("posted", "Posted or not", JOB_POSTED) + "</div>" +
+    `<fieldset class="checks"><legend>How I applied</legend>${JOB_HOW.map((h) => `<label class="check"><input type="checkbox" data-jobhow="${esc(h)}"${d.how.includes(h) ? " checked" : ""}>${esc(h)}</label>`).join("")}</fieldset>` +
+    '<div class="fields">' + field("applied", "Date applied", "date") + field("followUp", "Follow-up date", "date") + field("lastContacted", "Last contacted", "date") + "</div>" +
     field("next", "Next step", "text", ' maxlength="500"') +
     '<div class="fields">' + field("contactName", "Contact name", "text", ' maxlength="200"') + field("contactLink", "Contact link or email", "text", ' inputmode="email" placeholder="linkedin.com/in/... or name@company.com"') + "</div>" +
     field("postingLink", "Job posting link", "text", ' inputmode="url" placeholder="company.com/careers/..."') +
@@ -658,20 +662,24 @@ function jobsView(): string {
   const controls = '<div class="status"><div class="days" role="group" aria-label="Show">' +
     chip("jobfilter", "all", "all", S.jobFilter === "all") + JOB_STATUSES.map((s) => chip("jobfilter", s, s.toLowerCase(), S.jobFilter === s)).join("") + "</div></div>" +
     '<div class="status"><span class="meta">sort</span><div class="days" role="group" aria-label="Sort by">' +
-    chip("jobsort", "followup", "follow-up date", S.jobSort === "followup") + chip("jobsort", "status", "status", S.jobSort === "status") + "</div></div>";
+    chip("jobsort", "priority", "priority", S.jobSort === "priority") + chip("jobsort", "followup", "follow-up date", S.jobSort === "followup") + chip("jobsort", "status", "status", S.jobSort === "status") + "</div></div>";
   const shown = R.sortJobs(S.jobFilter === "all" ? all : all.filter((j) => j.status === S.jobFilter), S.jobSort);
   // One window per application, colored by status.
   const boxes = shown.map((j) => {
     const f = R.followUp(j, t);
     const color = JOB_COLOR[j.status] || "sky";
-    const tags = (j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : "");
+    const tags = (j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${esc(j.priority.toLowerCase())} priority</span>` : "") +
+      (j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : "") +
+      (j.posted ? `<span class="tag">${esc(j.posted.toLowerCase())}</span>` : "");
+    const how = j.how.length ? `<div class="howrow"><span class="meta">how I applied</span><span class="row">${j.how.map((h) => `<span class="tag mint">${esc(h.toLowerCase())}</span>`).join("")}</span></div>` : "";
     const body =
       `<div class="mid">${esc(j.company)}</div>` + (j.role ? `<div class="meta">${esc(j.role)}</div>` : "") +
-      `<div class="row">${tags}</div>` +
+      `<div class="row">${tags}</div>` + how +
       `<div class="follow"><span class="meta">follow-up</span><span class="row">${followHtml(j, t)}</span></div>` +
       (j.next ? `<div class="stack tight"><span class="meta">next step</span><div class="step">${esc(j.next)}</div></div>` : "") +
       `<div class="facts">` +
       `<div><span class="meta">applied</span> ${j.applied ? esc(lbl(j.applied) + " · " + rel(j.applied, t)) : "not yet"}</div>` +
+      (j.lastContacted ? `<div><span class="meta">last contacted</span> ${esc(lbl(j.lastContacted) + " · " + rel(j.lastContacted, t))}</div>` : "") +
       (j.contactName ? `<div><span class="meta">contact</span> ${esc(j.contactName)}</div>` : "") +
       (j.notes ? `<div><span class="meta">notes</span> ${esc(j.notes)}</div>` : "") + "</div>" +
       `<div class="row">` +
@@ -680,7 +688,7 @@ function jobsView(): string {
       `<a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
     if (S.jobEdit === j.id) return jobForm("edit_" + fileName(j.company + " " + j.role));
     const w = win(fileName(j.company + " " + j.role), color, body.replace(/<a class="link" href="[^"]*" target="_blank" rel="noopener noreferrer">open in Notion<\/a><\/div>$/,
-      `<button class="btn soft" type="button" data-act="jobedit" data-id="${esc(j.id)}">edit</button>$&`));
+      `<button class="btn soft" type="button" data-act="jobedit" data-id="${esc(j.id)}">edit</button>$&`), false, j.priority === "High" ? "star" : "");
     return f.kind === "overdue" ? w.replace('<section class="win"', '<section class="win late"') : w;
   }).join("");
   const table = boxes || win("applications.txt", "butter", `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
@@ -858,6 +866,7 @@ function openJobForm(id: string) {
   S.jobDraft = j ? {
     company: j.company, role: j.role, status: j.status, applied: j.applied || "", followUp: j.followUp || "", next: j.next,
     contactName: j.contactName, contactLink: (j.contactLink || "").replace(/^mailto:/, ""), postingLink: j.postingLink || "", notes: j.notes,
+    priority: j.priority, posted: j.posted, lastContacted: j.lastContacted || "", how: j.how.slice(),
   } : emptyJobDraft();
   S.jobEdit = id; render();
   document.getElementById("job-company")?.focus();
@@ -869,6 +878,7 @@ async function saveJob() {
   const payload = {
     company: d.company.trim(), role: d.role.trim(), status: d.status, applied: d.applied || null, followUp: d.followUp || null,
     next: d.next.trim(), contactName: d.contactName.trim(), contactLink: d.contactLink.trim(), postingLink: d.postingLink.trim(), notes: d.notes.trim(),
+    priority: d.priority, posted: d.posted, lastContacted: d.lastContacted || null, how: d.how,
   };
   if (!isLive(S.jobs)) { S.jobEdit = ""; render(); toast(SAMPLE_NOTE); return; }
   S.busy.job = true; render();
@@ -943,7 +953,7 @@ app.addEventListener("click", (e) => {
   else if (a === "jobnew") openJobForm("new");
   else if (a === "jobedit") openJobForm(id);
   else if (a === "jobcancel") { S.jobEdit = ""; render(); }
-  else if (a === "jobsort") { S.jobSort = b.dataset.v === "status" ? "status" : "followup"; render(); }
+  else if (a === "jobsort") { S.jobSort = b.dataset.v === "status" ? "status" : b.dataset.v === "followup" ? "followup" : "priority"; render(); }
   else if (a === "billform") { S.billForm = !S.billForm; render(); if (S.billForm) document.getElementById("billName")?.focus(); }
   else if (a === "billsview") { S.billsGroup = b.dataset.v === "paid" ? "paid" : "unpaid"; render(); }
   else if (a === "goproject") { e.preventDefault(); goProject(id); }
@@ -953,7 +963,9 @@ app.addEventListener("click", (e) => {
 });
 app.addEventListener("input", (e) => {
   const jt = e.target as HTMLInputElement, jk = jt.dataset?.job as keyof JobDraft | undefined;
-  if (jk && jk in S.jobDraft) { S.jobDraft[jk] = jt.value; return; }
+  if (jk && jk in S.jobDraft && jk !== "how") { (S.jobDraft as Record<string, unknown>)[jk] = jt.value; return; }
+  const hw = jt.dataset?.jobhow;
+  if (hw) { S.jobDraft.how = jt.checked ? [...new Set([...S.jobDraft.how, hw])] : S.jobDraft.how.filter((x) => x !== hw); return; }
   const t = e.target as HTMLInputElement, k = t.dataset?.draft as keyof typeof S.draft | undefined;
   if (!k || k === "hoursTouched") return;
   S.draft[k] = t.value;
@@ -967,7 +979,10 @@ app.addEventListener("input", (e) => {
 });
 app.addEventListener("change", (e) => {
   const jt = e.target as HTMLSelectElement;
-  if (jt.dataset?.job === "status") S.jobDraft.status = jt.value;
+  const jsel = jt.dataset?.job;
+  if (jsel === "status" || jsel === "priority" || jsel === "posted") S.jobDraft[jsel] = jt.value;
+  const hwc = (jt as unknown as HTMLInputElement).dataset?.jobhow;
+  if (hwc) { const on = (jt as unknown as HTMLInputElement).checked; S.jobDraft.how = on ? [...new Set([...S.jobDraft.how, hwc])] : S.jobDraft.how.filter((x) => x !== hwc); }
   const t = e.target as HTMLSelectElement;
   if (t.tagName === "SELECT" && t.dataset.draft === "block") S.draft.block = t.value;
 });

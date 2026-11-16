@@ -11,7 +11,7 @@
 
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
-import { JOB_STATUSES } from "../shared/types.js";
+import { JOB_HOW, JOB_POSTED, JOB_PRIORITIES, JOB_STATUSES } from "../shared/types.js";
 import type { CalendarRangeResponse, CalendarResponse, ListResponse, ProjectContentResponse } from "../shared/types.js";
 import { BILL_REPEATS, BILL_TYPES, cleanLink, type JobInput, NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
 import { sampleCalendar, sampleData, sampleNotes } from "./sample.js";
@@ -158,12 +158,19 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     const company = str("company", 120), role = str("role", 200), status = str("status", 40), next = str("next", 500),
       contactName = str("contactName", 200), notes = str("notes", 2000);
     const applied = date("applied"), followUp = date("followUp"), contactLink = link("contactLink"), postingLink = link("postingLink");
+    const priority = str("priority", 20), posted = str("posted", 20), lastContacted = date("lastContacted");
+    const howRaw = b?.how == null ? [] : b.how;
+    const how = Array.isArray(howRaw) && howRaw.every((x) => typeof x === "string" && (JOB_HOW as readonly string[]).includes(x)) ? [...new Set(howRaw as string[])] : null;
+    if (priority === null || (priority && !(JOB_PRIORITIES as readonly string[]).includes(priority))) return "priority";
+    if (posted === null || (posted && !(JOB_POSTED as readonly string[]).includes(posted))) return "posted";
+    if (how === null) return "how";
+    if (lastContacted === undefined) return "date";
     if (!company) return "company";
     if (role === null || next === null || contactName === null || notes === null) return "text";
     if (status === null || (status && !(JOB_STATUSES as readonly string[]).includes(status))) return "status";
     if (applied === undefined || followUp === undefined) return "date";
     if (contactLink === undefined || postingLink === undefined) return "link";
-    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes };
+    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes, priority, how, posted, lastContacted };
   }
 
   app.post("/api/jobs", async (c) => {

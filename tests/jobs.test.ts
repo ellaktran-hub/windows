@@ -20,12 +20,12 @@ test("reads every Job Applications property", async () => {
   const [j] = await new NotionReader("t", f).jobs();
   assert.deepEqual(seen, [["POST", `https://api.notion.com/v1/data_sources/${DS.jobs}/query`]], "one read, nothing else");
   assert.deepEqual(j, { id: "cccccccccccccccccccccccccccccccc", url: "https://www.notion.so/c", company: "PTC", role: "Sales Intern", status: "Applied",
-    applied: "2026-11-16", followUp: null, next: "Message on LinkedIn", contactName: "Chris", contactLink: "https://linkedin.com/in/x", postingLink: null, notes: "Met at open house" });
+    applied: "2026-11-16", followUp: null, next: "Message on LinkedIn", contactName: "Chris", contactLink: "https://linkedin.com/in/x", postingLink: null, notes: "Met at open house", priority: "", how: [], posted: "", lastContacted: null });
   assert.equal(webLink({ type: "url", url: "" }), null);
   assert.equal(normJob({ id: "x", url: "", created_time: "", properties: {} } as any).company, "Untitled");
 });
 
-const job = (o: Partial<Job>): Job => ({ id: o.company || "x", url: "", company: "x", role: "", status: "Applied", applied: null, followUp: null, next: "", contactName: "", contactLink: null, postingLink: null, notes: "", ...o });
+const job = (o: Partial<Job>): Job => ({ id: o.company || "x", url: "", company: "x", role: "", status: "Applied", applied: null, followUp: null, next: "", contactName: "", contactLink: null, postingLink: null, notes: "", priority: "", how: [], posted: "", lastContacted: null, ...o } as Job);
 
 test("follow-up marks: overdue, today, soon, later, none, and never for closed ones", () => {
   assert.deepEqual(R.followUp(job({ followUp: "2026-11-14" }), T), { kind: "overdue", days: -2 });
@@ -45,6 +45,8 @@ test("sorting and counts", () => {
   ];
   assert.deepEqual(R.sortJobs(jobs, "status").map((j) => j.company), ["B", "D", "A", "C"]);
   assert.deepEqual(R.sortJobs(jobs, "followup").map((j) => j.company), ["B", "A", "D", "C"], "closed ones last, no date after dated");
+  const pr = [job({ company: "P1", priority: "Low", followUp: "2026-11-17" }), job({ company: "P2", priority: "High" }), job({ company: "P3", priority: "High", status: "Rejected" }), job({ company: "P4" })];
+  assert.deepEqual(R.sortJobs(pr, "priority").map((j) => j.company), ["P2", "P1", "P4", "P3"], "high first, closed last");
   assert.deepEqual(R.jobCounts(jobs), { Interested: 1, Applied: 1, Interviewing: 1, Offer: 0, Rejected: 1, Withdrawn: 0 });
 });
 
@@ -56,7 +58,9 @@ test("adding and editing a job: checked values, every field sent, never deleted"
     assert.equal((await post("/api/jobs", b)).status, 400, JSON.stringify(b));
   assert.equal(calls.length, 0);
   assert.equal((await post("/api/jobs", { company: " PTC ", role: "Sales Intern", status: "Applied", applied: "2026-11-16", contactLink: "linkedin.com/in/chris" })).status, 200);
-  assert.deepEqual(calls[0], ["new", { company: "PTC", role: "Sales Intern", status: "Applied", applied: "2026-11-16", followUp: null, next: "", contactName: "", contactLink: "https://linkedin.com/in/chris", postingLink: null, notes: "" }]);
+  assert.deepEqual(calls[0], ["new", { company: "PTC", role: "Sales Intern", status: "Applied", applied: "2026-11-16", followUp: null, next: "", contactName: "", contactLink: "https://linkedin.com/in/chris", postingLink: null, notes: "", priority: "", how: [], posted: "", lastContacted: null }]);
+  for (const b of [{ company: "A", priority: "Urgent" }, { company: "A", how: ["Carrier pigeon"] }, { company: "A", how: "Online" }, { company: "A", posted: "Maybe" }, { company: "A", lastContacted: "yesterday" }])
+    assert.equal((await post("/api/jobs", b)).status, 400, JSON.stringify(b));
   assert.equal((await post("/api/jobs/abc", { company: "PTC", status: "Interviewing", followUp: "2026-11-20" })).status, 200);
   assert.equal(calls[1][0], "edit"); assert.equal(calls[1][1], "abc"); assert.equal(calls[1][2].followUp, "2026-11-20");
   for (const m of ["PATCH", "DELETE"]) {
@@ -71,11 +75,13 @@ test("job writes go only to real Job Applications rows", async () => {
   const replies = [{ object: "page", parent: { type: "data_source_id", data_source_id: DS.jobs } }, {}, { object: "page", parent: { type: "data_source_id", data_source_id: DS.bills } }];
   const f = (async (url: string, init: any) => { seen.push([init.method, url, init.body ? JSON.parse(init.body) : null]); return new Response(JSON.stringify(replies.shift())); }) as typeof fetch;
   const n = new NotionReader("t", f);
-  const input = { company: "PTC", role: "", status: "", applied: null, followUp: null, next: "", contactName: "", contactLink: null, postingLink: null, notes: "" };
+  const input = { company: "PTC", role: "", status: "", applied: null, followUp: null, next: "", contactName: "", contactLink: null, postingLink: null, notes: "", priority: "High", how: ["Online", "In person"], posted: "Posted", lastContacted: null };
   await n.updateJob("dddddddddddddddddddddddddddddddd", input);
   assert.equal(seen[1][0], "PATCH");
   assert.deepEqual(seen[1][2], { properties: jobProps(input) });
   assert.deepEqual(jobProps(input)["Follow-up date"], { date: null }, "a cleared date is cleared in Notion");
+  assert.deepEqual(jobProps(input)["How I applied"], { multi_select: [{ name: "Online" }, { name: "In person" }] });
+  assert.deepEqual(jobProps(input)["Priority"], { select: { name: "High" } });
   await assert.rejects(n.updateJob("dddddddddddddddddddddddddddddddd", input));
   assert.equal(seen.length, 3, "no PATCH for a row outside Job Applications");
 });

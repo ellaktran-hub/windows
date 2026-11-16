@@ -46,6 +46,9 @@ export interface SleepEntry {
 }
 
 export const JOB_STATUSES = ["Interested", "Applied", "Interviewing", "Offer", "Rejected", "Withdrawn"] as const;
+export const JOB_PRIORITIES = ["High", "Medium", "Low"] as const;
+export const JOB_HOW = ["Online", "In person", "Internal", "Referral", "Reached out"] as const;
+export const JOB_POSTED = ["Posted", "Not posted"] as const;
 export interface Job {
   id: string;
   url: string; // the row in Notion
@@ -59,6 +62,10 @@ export interface Job {
   contactLink: string | null; // http(s) only
   postingLink: string | null; // http(s) only
   notes: string;
+  priority: string; // High, Medium, Low
+  how: string[]; // How I applied
+  posted: string; // Posted, Not posted
+  lastContacted: string | null; // YYYY-MM-DD, from Notion
 }
 
 export interface Appointment {

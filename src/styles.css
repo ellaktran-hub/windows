@@ -194,7 +194,14 @@ table.rates td.top .chip { display: inline-block; font-weight: 700; background: 
 .count .num { font-family: var(--font-serif); font-size: 26px; line-height: 1.1; }
 .count.all { border-color: var(--ink); }
 .win.late { border-left: 8px solid var(--coral); }
-.follow { display: grid; gap: 4px; }
+.follow, .howrow { display: grid; gap: 4px; }
+.tag.prio-high { background: var(--peach); border-color: var(--coral-ink); color: var(--coral-ink); }
+.tag.prio-medium { background: var(--butter); }
+.tag.prio-low { background: var(--mist); }
+fieldset.checks { border: 2px solid var(--ink); border-radius: 6px; padding: 6px 10px 10px; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+fieldset.checks legend { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; padding: 0 4px; }
+label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; letter-spacing: 0; text-transform: none; min-height: 32px; }
+label.check input { width: 20px; height: 20px; min-height: 0; accent-color: var(--sea); }
 .facts { display: grid; gap: 4px; font-size: 14px; padding: 8px 10px; background: var(--paper); border: 2px dashed rgba(90, 51, 38, 0.25); border-radius: 6px; overflow-wrap: anywhere; }
 .btn.tiny { font-size: 11px; padding: 0 8px; min-height: 26px; margin-top: 4px; }
 .note { font-size: 13px; background: var(--paper); border: 2px dashed var(--ink); border-radius: 6px; padding: 8px 12px; }

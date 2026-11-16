@@ -249,6 +249,7 @@ const prop = (p: NotionPage, name: string) => p.properties?.[name];
 const plain = (arr: unknown): string => (Array.isArray(arr) ? arr.map((t: any) => t?.plain_text ?? "").join("") : "");
 export const text = (v: any): string => (!v ? "" : v.type === "title" ? plain(v.title) : v.type === "rich_text" ? plain(v.rich_text) : "");
 export const sel = (v: any): string => (v?.type === "select" ? v.select?.name || "" : v?.type === "status" ? v.status?.name || "" : "");
+export const multi = (v: any): string[] => (v?.type === "multi_select" && Array.isArray(v.multi_select) ? v.multi_select.map((o: any) => String(o?.name || "")).filter(Boolean) : []);
 export const check = (v: any): boolean => v?.type === "checkbox" && v.checkbox === true;
 export const num = (v: any): number | null => (v?.type === "number" && typeof v.number === "number" ? v.number : null);
 export const day = (v: any): string | null => (v?.type === "date" && v.date?.start ? String(v.date.start).slice(0, 10) : null);
@@ -291,6 +292,7 @@ export function normBill(p: NotionPage): Bill {
 export interface JobInput {
   company: string; role: string; status: string; applied: string | null; followUp: string | null;
   next: string; contactName: string; contactLink: string | null; postingLink: string | null; notes: string;
+  priority: string; how: string[]; posted: string; lastContacted: string | null;
 }
 const rtProp = (v: string) => ({ rich_text: v ? [{ text: { content: v } }] : [] });
 /** Every field is sent, so clearing one in the form clears it in Notion. */
@@ -306,6 +308,10 @@ export function jobProps(j: JobInput): Record<string, unknown> {
     "Contact link": { url: j.contactLink || null },
     "Job posting link": { url: j.postingLink || null },
     Notes: rtProp(j.notes),
+    Priority: { select: j.priority ? { name: j.priority } : null },
+    "How I applied": { multi_select: j.how.map((name) => ({ name })) },
+    "Posted or not": { select: j.posted ? { name: j.posted } : null },
+    "Last contacted": { date: j.lastContacted ? { start: j.lastContacted } : null },
   };
 }
 
@@ -343,6 +349,10 @@ export function normJob(p: NotionPage): Job {
     contactLink: webLink(prop(p, "Contact link")),
     postingLink: webLink(prop(p, "Job posting link")),
     notes: text(prop(p, "Notes")),
+    priority: sel(prop(p, "Priority")),
+    how: multi(prop(p, "How I applied")),
+    posted: sel(prop(p, "Posted or not")),
+    lastContacted: day(prop(p, "Last contacted")),
   };
 }
 
