@@ -185,6 +185,10 @@ table.rates td.top .chip { display: inline-block; font-weight: 700; background: 
 .appt .title { font-family: var(--font-serif); font-size: 18px; line-height: 1.2; }
 .appt.c-peach .when { background: var(--peach); } .appt.c-mint .when { background: var(--mint); } .appt.c-sky .when { background: var(--sky); }
 .appt.c-butter .when { background: var(--butter); } .appt.c-pink .when { background: var(--pink); }
+/* When Google gives a calendar color, use it: softened for the time block and tag, exact for a thin stripe. */
+.appt[data-color] { border-left: 6px solid var(--cal); }
+.appt[data-color] .when { background: var(--cal-soft); }
+.appt[data-color] .caltag { background: var(--cal-tag); }
 .note { font-size: 13px; background: var(--paper); border: 2px dashed var(--ink); border-radius: 6px; padding: 8px 12px; }
 .note.sample { background: var(--mint); border-style: solid; font-weight: 700; }
 

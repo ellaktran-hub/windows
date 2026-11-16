@@ -51,6 +51,7 @@ export interface Appointment {
   title: string;
   link?: string; // the event in Google Calendar, for editing there
   cal?: string; // which calendar it came from, like "Personal"
+  color?: string; // that calendar's color in Google Calendar, like "#e67c73"
   until?: string; // end time, for timed events
 }
 

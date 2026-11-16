@@ -118,10 +118,11 @@ const dayOf = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZ
 export async function readRange(cfg: GoogleConfig, start: string, days: number, fetchImpl: Fetch = (i, n) => fetch(i, n)): Promise<Record<string, Calendar>> {
   const token = await accessToken(cfg, fetchImpl);
   const list = await getJson(`${API}/users/me/calendarList?minAccessRole=reader&maxResults=250`, token, fetchImpl);
-  const items: Array<{ id: string; summary?: string; summaryOverride?: string }> = Array.isArray(list?.items) ? list.items : [];
+  const items: Array<{ id: string; summary?: string; summaryOverride?: string; backgroundColor?: string }> = Array.isArray(list?.items) ? list.items : [];
   const cals = items
-    .map((c) => ({ id: c.id, name: (c.summaryOverride || c.summary || "").trim() }))
+    .map((c) => ({ id: c.id, name: (c.summaryOverride || c.summary || "").trim(), color: /^#[0-9a-f]{6}$/i.test(c.backgroundColor || "") ? c.backgroundColor!.toLowerCase() : undefined }))
     .filter((c) => WANT.includes(c.name));
+  const colorOf: Record<string, string | undefined> = Object.fromEntries(cals.map((c) => [c.name, c.color]));
 
   const end = addDays(start, days);
   const timeMin = midnight(start), timeMax = midnight(end);
@@ -146,7 +147,7 @@ export async function readRange(cfg: GoogleConfig, start: string, days: number, 
         const a = acc[d]; if (!a) continue;
         if (r.value.cal === "Work") { a.starts.push(ev.start.dateTime); a.ends.push(ev.end?.dateTime || ev.start.dateTime); }
         else if (r.value.cal === "No Work") a.noWork.push(ev.summary);
-        else a.appts.push({ sort: ev.start.dateTime, time: fmtTime(ev.start.dateTime), title: ev.summary, cal: r.value.cal,
+        else a.appts.push({ sort: ev.start.dateTime, time: fmtTime(ev.start.dateTime), title: ev.summary, cal: r.value.cal, ...(colorOf[r.value.cal] ? { color: colorOf[r.value.cal] } : {}),
           ...(ev.end?.dateTime && dayOf(ev.end.dateTime) === d ? { until: fmtTime(ev.end.dateTime) } : {}), ...(link ? { link } : {}) });
       } else {
         const s0 = ev.start.date || "", e0 = ev.end?.date || addDays(s0, 1);
@@ -155,7 +156,7 @@ export async function readRange(cfg: GoogleConfig, start: string, days: number, 
           const a = acc[d];
           if (r.value.cal === "Work") a.tags.push(ev.summary);
           else if (r.value.cal === "No Work") a.noWork.push(ev.summary);
-          else a.appts.push({ sort: "0", time: "all day", title: ev.summary, cal: r.value.cal, ...(link ? { link } : {}) });
+          else a.appts.push({ sort: "0", time: "all day", title: ev.summary, cal: r.value.cal, ...(colorOf[r.value.cal] ? { color: colorOf[r.value.cal] } : {}), ...(link ? { link } : {}) });
         }
       }
     }

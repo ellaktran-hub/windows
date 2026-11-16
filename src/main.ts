@@ -205,10 +205,11 @@ function apptsHtml(appts: Appointment[], links = false): string {
     const color = CAL_COLOR[a.cal || ""] || "lilac";
     const allDay = a.time === "all day";
     const title = links && a.link ? `<a class="plain" href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a>` : esc(a.title);
-    return `<li class="appt c-${color}">` +
+    const own = a.color && /^#[0-9a-f]{6}$/i.test(a.color) ? ` data-color="${a.color}"` : "";
+    return `<li class="appt c-${color}"${own}>` +
       `<span class="when">${allDay ? '<span class="allday">all day</span>' : esc(a.time.replace(/ (am|pm)$/, "")) + `<small>${esc(a.time.slice(-2))}</small>`}</span>` +
       `<span class="what"><span class="title">${title}</span>` +
-      `<span class="row">${a.cal ? `<span class="tag ${color}">${esc(a.cal.toLowerCase())}</span>` : ""}${a.until ? `<span class="meta">until ${esc(a.until)}</span>` : ""}</span></span></li>`;
+      `<span class="row">${a.cal ? `<span class="tag caltag ${color}">${esc(a.cal.toLowerCase())}</span>` : ""}${a.until ? `<span class="meta">until ${esc(a.until)}</span>` : ""}</span></span></li>`;
   }).join("")}</ul>`;
 }
 
@@ -617,11 +618,28 @@ function sparkle(el: Element) {
   setTimeout(() => sp.remove(), 700);
 }
 
+/** Mixes a calendar color with the page's paper color so text on it stays easy to read. */
+function soften(hex: string, amount = 0.55): string {
+  const n = parseInt(hex.slice(1), 16), paper = [0xff, 0xf8, 0xec];
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v, i) => Math.round(v + (paper[i] - v) * amount));
+  return "#" + rgb.map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+/** Gives each event card its Google Calendar color (set through the style object, which the security policy allows). */
+function applyCalColors() {
+  app.querySelectorAll<HTMLElement>(".appt[data-color]").forEach((el) => {
+    const c = el.dataset.color!;
+    el.style.setProperty("--cal", c);
+    el.style.setProperty("--cal-soft", soften(c));
+    el.style.setProperty("--cal-tag", soften(c, 0.7));
+  });
+}
+
 function render() {
   document.documentElement.dataset.time = timeOfDay(hourNow());
   const a = document.activeElement as HTMLInputElement | null;
   const id = a?.id, ss = a?.selectionStart, se = a?.selectionEnd;
   app.innerHTML = view();
+  applyCalColors();
   if (id) {
     const n = document.getElementById(id) as HTMLInputElement | null;
     if (n) { try { n.focus({ preventScroll: true }); if (ss != null && se != null && n.setSelectionRange) n.setSelectionRange(ss, se); } catch { /* not a text field */ } }

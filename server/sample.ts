@@ -50,10 +50,10 @@ export function sampleData() {
 /** A sample calendar for a day, only used when nothing real is connected. */
 export function sampleCalendar(day: string): Calendar {
   const wd = new Date(day + "T12:00:00Z").getUTCDay();
-  if (wd === 0 || wd === 6) return { connected: true, work: null, noWork: ["Sample: Day off"], tags: [], appts: [{ sort: "0", time: "all day", title: "Sample: Farmers market", cal: "Personal" }], failed: 0 };
+  if (wd === 0 || wd === 6) return { connected: true, work: null, noWork: ["Sample: Day off"], tags: [], appts: [{ sort: "0", time: "all day", title: "Sample: Farmers market", cal: "Personal", color: "#e6a5c1" }], failed: 0 };
   const appts = wd === 3
-    ? [{ sort: "1", time: "3:30 pm", until: "4:15 pm", title: "Sample: Allergist", cal: "Appointments" }, { sort: "2", time: "7:00 pm", title: "Sample: Study group", cal: "School" }]
-    : wd === 5 ? [{ sort: "0", time: "all day", title: "Sample: Return library books", cal: "Reminders" }, { sort: "1", time: "6:00 pm", until: "8:00 pm", title: "Sample: Dinner", cal: "Harry + Ella" }] : [];
+    ? [{ sort: "1", time: "3:30 pm", until: "4:15 pm", title: "Sample: Allergist", cal: "Appointments", color: "#d9785d" }, { sort: "2", time: "7:00 pm", title: "Sample: Study group", cal: "School", color: "#9b84d8" }]
+    : wd === 5 ? [{ sort: "0", time: "all day", title: "Sample: Return library books", cal: "Reminders", color: "#4f9e8b" }, { sort: "1", time: "6:00 pm", until: "8:00 pm", title: "Sample: Dinner", cal: "Personal", color: "#e6a5c1" }] : [];
   return { connected: true, work: "9:00 am – 5:00 pm", noWork: [], tags: wd === 5 ? ["Sample: payday"] : [], appts, failed: 0 };
 }
 
