@@ -3,7 +3,7 @@
 // sent to the browser or written to logs.
 //
 // Reads, plus a few small writes: task status, Top 3, new task, new sleep
-// entry, new bill, and a bill's Paid box (which only ticks the box; it
+// entry, new bill, new or edited job application, and a bill's Paid box (which only ticks the box; it
 // never pays anything). There is no delete, archive, or trash call here.
 
 import type { Bill, Job, NoteBlock, Project, RichBit, SleepEntry, Task } from "../shared/types.js";
@@ -128,6 +128,23 @@ export class NotionReader {
   /** Job Applications, read only. */
   async jobs(): Promise<Job[]> {
     return (await this.query(DS.jobs)).map(normJob);
+  }
+  /** Confirms a page really is a row in Job Applications before changing it. */
+  private async assertJob(pageId: string): Promise<string> {
+    const id = idOf(pageId);
+    if (!/^[0-9a-f]{32}$/.test(id)) throw new NotionFail("bad_request", 400, "bad id");
+    const p = await this.send("GET", `/pages/${id}`, undefined, false);
+    if (idOf(p?.parent?.data_source_id || "") !== idOf(DS.jobs) || p.in_trash === true || p.archived === true) throw new NotionFail("not_a_job", 400);
+    return id;
+  }
+  /** Adds an application. */
+  async createJob(j: JobInput): Promise<void> {
+    await this.send("POST", "/pages", { parent: { type: "data_source_id", data_source_id: DS.jobs }, properties: jobProps(j) }, true);
+  }
+  /** Changes an application's fields. Never deletes it. */
+  async updateJob(pageId: string, j: JobInput): Promise<void> {
+    const id = await this.assertJob(pageId);
+    await this.send("PATCH", `/pages/${id}`, { properties: jobProps(j) }, true);
   }
   async sleep(): Promise<SleepEntry[]> {
     const rows = await this.query(DS.sleep, { sorts: [{ timestamp: "created_time", direction: "descending" }] });
@@ -271,6 +288,27 @@ export function normBill(p: NotionPage): Bill {
     due: day(prop(p, "Due")),
   };
 }
+export interface JobInput {
+  company: string; role: string; status: string; applied: string | null; followUp: string | null;
+  next: string; contactName: string; contactLink: string | null; postingLink: string | null; notes: string;
+}
+const rtProp = (v: string) => ({ rich_text: v ? [{ text: { content: v } }] : [] });
+/** Every field is sent, so clearing one in the form clears it in Notion. */
+export function jobProps(j: JobInput): Record<string, unknown> {
+  return {
+    Company: { title: [{ text: { content: j.company } }] },
+    Role: rtProp(j.role),
+    Status: { select: j.status ? { name: j.status } : null },
+    "Date applied": { date: j.applied ? { start: j.applied } : null },
+    "Follow-up date": { date: j.followUp ? { start: j.followUp } : null },
+    "Next step": rtProp(j.next),
+    "Contact name": rtProp(j.contactName),
+    "Contact link": { url: j.contactLink || null },
+    "Job posting link": { url: j.postingLink || null },
+    Notes: rtProp(j.notes),
+  };
+}
+
 /** A link property, kept only when it is a normal web address. */
 export const webLink = (v: any): string | null => {
   const u = v?.type === "url" && typeof v.url === "string" ? v.url.trim() : "";

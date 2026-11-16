@@ -49,6 +49,8 @@ const S = {
   jobs: slot<Job[]>(), // Job Applications, read only
   jobFilter: "all", // a status, or "all"
   jobSort: "followup" as "status" | "followup",
+  jobEdit: "", // "" when no form is open, "new" for a new application, or the id being edited
+  jobDraft: emptyJobDraft(),
   focusProject: "", // a project to scroll to when the projects tab opens
   openProject: "", // the project whose page is open (#project/<id>)
   notes: {} as Record<string, Slot<ProjectContentResponse>>, // project notes, loaded when a page opens
@@ -606,8 +608,30 @@ function cardsView(): string {
   return intro + grid + bestW + cardWins + limits;
 }
 
-// Job Applications: read only. Everything here comes from the Notion database;
-// changes are made in Notion.
+// Job Applications: read from the Notion database, with forms to add and edit
+// (never delete). Every save goes to Notion and the page re-reads it.
+type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; notes: string };
+function emptyJobDraft(): JobDraft {
+  return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", notes: "" };
+}
+function jobForm(title: string): string {
+  const d = S.jobDraft, busy = !!S.busy.job;
+  const field = (k: keyof JobDraft, label: string, type = "text", extra = "") =>
+    `<label for="job-${k}">${label}<input id="job-${k}" data-job="${k}" type="${type}" autocomplete="off"${extra} value="${esc(d[k])}"></label>`;
+  return win(title, "sky",
+    '<form data-form="job" novalidate>' +
+    field("company", "Company", "text", ' maxlength="120"') + field("role", "Role", "text", ' maxlength="200"') +
+    '<div class="fields">' +
+    `<label for="job-status">Status<select id="job-status" data-job="status"><option value="">none</option>${JOB_STATUSES.map((st) => `<option${d.status === st ? " selected" : ""}>${st}</option>`).join("")}</select></label>` +
+    field("applied", "Date applied", "date") + field("followUp", "Follow-up date", "date") + "</div>" +
+    field("next", "Next step", "text", ' maxlength="500"') +
+    '<div class="fields">' + field("contactName", "Contact name", "text", ' maxlength="200"') + field("contactLink", "Contact link", "text", ' inputmode="url" placeholder="linkedin.com/in/..."') + "</div>" +
+    field("postingLink", "Job posting link", "text", ' inputmode="url" placeholder="company.com/careers/..."') +
+    `<label for="job-notes">Notes<textarea id="job-notes" data-job="notes" rows="3" maxlength="2000">${esc(d.notes)}</textarea></label>` +
+    `<div class="row"><button class="btn" type="submit"${busy ? " disabled" : ""}>${busy ? "saving" : "save to Notion"}</button><button class="btn soft" type="button" data-act="jobcancel">cancel</button></div>` +
+    "</form>", true);
+}
+
 const JOBS_NOTION = "https://www.notion.so/41a50e78d6d481878d3fefdcc714f46d";
 const JOB_COLOR: Record<string, string> = { Interested: "sky", Applied: "butter", Interviewing: "lilac", Offer: "mint", Rejected: "", Withdrawn: "" };
 function followHtml(j: Job, t: string): string {
@@ -621,7 +645,8 @@ function followHtml(j: Job, t: string): string {
 }
 function jobsView(): string {
   const t = todayStr();
-  const top = `<div class="status"><span class="meta">read only · edit in Notion</span><a class="btn go" href="${JOBS_NOTION}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
+  const top = `<div class="status">${S.jobEdit === "new" ? "" : '<button class="btn add" type="button" data-act="jobnew">add an application</button>'}<a class="btn go" href="${JOBS_NOTION}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>` +
+    (S.jobEdit === "new" ? jobForm("new_application.exe") : "");
   if (!S.jobs.data) return top + win("applications.txt", "butter", sect(S.jobs, () => ""), true);
   const all = S.jobs.data;
   const note = S.jobs.status === "error" ? `<div class="note wide">${esc(errText(S.jobs.err, "Notion"))} Showing the last copy.</div>` : "";
@@ -653,7 +678,9 @@ function jobsView(): string {
       (j.postingLink ? `<a class="btn go" href="${esc(j.postingLink)}" target="_blank" rel="noopener noreferrer">job posting</a>` : "") +
       (j.contactLink ? `<a class="btn go" href="${esc(j.contactLink)}" target="_blank" rel="noopener noreferrer">contact</a>` : "") +
       `<a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
-    const w = win(fileName(j.company + " " + j.role), color, body);
+    if (S.jobEdit === j.id) return jobForm("edit_" + fileName(j.company + " " + j.role));
+    const w = win(fileName(j.company + " " + j.role), color, body.replace(/<a class="link" href="[^"]*" target="_blank" rel="noopener noreferrer">open in Notion<\/a><\/div>$/,
+      `<button class="btn soft" type="button" data-act="jobedit" data-id="${esc(j.id)}">edit</button>$&`));
     return f.kind === "overdue" ? w.replace('<section class="win"', '<section class="win late"') : w;
   }).join("");
   const table = boxes || win("applications.txt", "butter", `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
@@ -825,6 +852,38 @@ async function setPaid(id: string, paid: boolean) {
   }
 }
 
+function openJobForm(id: string) {
+  const j = (S.jobs.data || []).find((x) => x.id === id);
+  if (id !== "new" && !j) return;
+  S.jobDraft = j ? {
+    company: j.company, role: j.role, status: j.status, applied: j.applied || "", followUp: j.followUp || "", next: j.next,
+    contactName: j.contactName, contactLink: j.contactLink || "", postingLink: j.postingLink || "", notes: j.notes,
+  } : emptyJobDraft();
+  S.jobEdit = id; render();
+  document.getElementById("job-company")?.focus();
+}
+async function saveJob() {
+  const d = S.jobDraft, id = S.jobEdit;
+  if (S.busy.job || !id) return;
+  if (!d.company.trim()) { toast("Add the company name first.", true); return; }
+  const payload = {
+    company: d.company.trim(), role: d.role.trim(), status: d.status, applied: d.applied || null, followUp: d.followUp || null,
+    next: d.next.trim(), contactName: d.contactName.trim(), contactLink: d.contactLink.trim(), postingLink: d.postingLink.trim(), notes: d.notes.trim(),
+  };
+  if (!isLive(S.jobs)) { S.jobEdit = ""; render(); toast(SAMPLE_NOTE); return; }
+  S.busy.job = true; render();
+  try {
+    await postJson(id === "new" ? "/api/jobs" : "/api/jobs/" + encodeURIComponent(id), payload);
+    S.busy.job = false; S.jobEdit = ""; toast(id === "new" ? "Added to Notion." : "Saved to Notion.");
+    await pause(700);
+    await load(S.jobs, list<Job>("/api/jobs"));
+  } catch (e) {
+    S.busy.job = false; render();
+    const m = writeMsg(e);
+    toast(m.includes("did not look right") ? "Something in the form did not look right, like a link or a date. Nothing was saved." : m.replace("Nothing was changed.", "Nothing was saved."), true);
+  }
+}
+
 async function addBill() {
   const d = S.draft, name = d.billName.trim();
   if (S.busy.bill) return;
@@ -881,6 +940,9 @@ app.addEventListener("click", (e) => {
   else if (a === "paid") void setPaid(id, true);
   else if (a === "unpaid") void setPaid(id, false);
   else if (a === "jobfilter") { S.jobFilter = (JOB_STATUSES as readonly string[]).includes(b.dataset.v || "") ? b.dataset.v! : "all"; render(); }
+  else if (a === "jobnew") openJobForm("new");
+  else if (a === "jobedit") openJobForm(id);
+  else if (a === "jobcancel") { S.jobEdit = ""; render(); }
   else if (a === "jobsort") { S.jobSort = b.dataset.v === "status" ? "status" : "followup"; render(); }
   else if (a === "billform") { S.billForm = !S.billForm; render(); if (S.billForm) document.getElementById("billName")?.focus(); }
   else if (a === "billsview") { S.billsGroup = b.dataset.v === "paid" ? "paid" : "unpaid"; render(); }
@@ -890,6 +952,8 @@ app.addEventListener("click", (e) => {
   else if (a === "pin") void togglePin(id);
 });
 app.addEventListener("input", (e) => {
+  const jt = e.target as HTMLInputElement, jk = jt.dataset?.job as keyof JobDraft | undefined;
+  if (jk && jk in S.jobDraft) { S.jobDraft[jk] = jt.value; return; }
   const t = e.target as HTMLInputElement, k = t.dataset?.draft as keyof typeof S.draft | undefined;
   if (!k || k === "hoursTouched") return;
   S.draft[k] = t.value;
@@ -902,12 +966,15 @@ app.addEventListener("input", (e) => {
   }
 });
 app.addEventListener("change", (e) => {
+  const jt = e.target as HTMLSelectElement;
+  if (jt.dataset?.job === "status") S.jobDraft.status = jt.value;
   const t = e.target as HTMLSelectElement;
   if (t.tagName === "SELECT" && t.dataset.draft === "block") S.draft.block = t.value;
 });
 app.addEventListener("submit", (e) => {
   e.preventDefault();
   const f = (e.target as HTMLFormElement).dataset.form;
+  if (f === "job") { void saveJob(); return; }
   if (f === "task") void addTask(); else if (f === "sleep") void saveSleep(); else if (f === "bill") void addBill();
 });
 

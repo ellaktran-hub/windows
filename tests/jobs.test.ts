@@ -48,13 +48,34 @@ test("sorting and counts", () => {
   assert.deepEqual(R.jobCounts(jobs), { Interested: 1, Applied: 1, Interviewing: 1, Offer: 0, Rejected: 1, Withdrawn: 0 });
 });
 
-test("the jobs page is read only", async () => {
-  const app = createApp({ notion: () => null, demo: false, google: () => ({ clientId: "", clientSecret: "", refreshToken: "" }) });
-  const r = await (await app.request("http://hw.test/api/jobs")).json();
-  assert.equal(r.source, "sample");
-  assert.ok(r.items.length > 0);
-  for (const m of ["POST", "PATCH", "DELETE"]) {
-    const w = await app.request("http://hw.test/api/jobs", { method: m, headers: { "Content-Type": "application/json" }, body: "{}" });
-    assert.equal(w.status, 404, m);
+test("adding and editing a job: checked values, every field sent, never deleted", async () => {
+  const calls: any[] = [];
+  const app = createApp({ notion: () => ({ createJob: async (j: unknown) => { calls.push(["new", j]); }, updateJob: async (id: string, j: unknown) => { calls.push(["edit", id, j]); } }) as any, demo: false, google: () => ({ clientId: "", clientSecret: "", refreshToken: "" }) });
+  const post = (path: string, b: unknown) => app.request("http://hw.test" + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+  for (const b of [{}, { company: "" }, { company: "A", status: "Ghosted" }, { company: "A", applied: "soon" }, { company: "A", postingLink: "javascript:alert(1)" }, { company: "A", notes: "x".repeat(2001) }])
+    assert.equal((await post("/api/jobs", b)).status, 400, JSON.stringify(b));
+  assert.equal(calls.length, 0);
+  assert.equal((await post("/api/jobs", { company: " PTC ", role: "Sales Intern", status: "Applied", applied: "2026-11-16", contactLink: "linkedin.com/in/chris" })).status, 200);
+  assert.deepEqual(calls[0], ["new", { company: "PTC", role: "Sales Intern", status: "Applied", applied: "2026-11-16", followUp: null, next: "", contactName: "", contactLink: "https://linkedin.com/in/chris", postingLink: null, notes: "" }]);
+  assert.equal((await post("/api/jobs/abc", { company: "PTC", status: "Interviewing", followUp: "2026-11-20" })).status, 200);
+  assert.equal(calls[1][0], "edit"); assert.equal(calls[1][1], "abc"); assert.equal(calls[1][2].followUp, "2026-11-20");
+  for (const m of ["PATCH", "DELETE"]) {
+    const w = await app.request("http://hw.test/api/jobs/abc", { method: m, headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(w.status, 404, m + " is not a route");
   }
+});
+
+test("job writes go only to real Job Applications rows", async () => {
+  const { jobProps } = await import("../server/notion.js");
+  const seen: any[] = [];
+  const replies = [{ object: "page", parent: { type: "data_source_id", data_source_id: DS.jobs } }, {}, { object: "page", parent: { type: "data_source_id", data_source_id: DS.bills } }];
+  const f = (async (url: string, init: any) => { seen.push([init.method, url, init.body ? JSON.parse(init.body) : null]); return new Response(JSON.stringify(replies.shift())); }) as typeof fetch;
+  const n = new NotionReader("t", f);
+  const input = { company: "PTC", role: "", status: "", applied: null, followUp: null, next: "", contactName: "", contactLink: null, postingLink: null, notes: "" };
+  await n.updateJob("dddddddddddddddddddddddddddddddd", input);
+  assert.equal(seen[1][0], "PATCH");
+  assert.deepEqual(seen[1][2], { properties: jobProps(input) });
+  assert.deepEqual(jobProps(input)["Follow-up date"], { date: null }, "a cleared date is cleared in Notion");
+  await assert.rejects(n.updateJob("dddddddddddddddddddddddddddddddd", input));
+  assert.equal(seen.length, 3, "no PATCH for a row outside Job Applications");
 });

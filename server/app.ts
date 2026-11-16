@@ -4,15 +4,16 @@
 // Safety rules kept in this file:
 // - There are no routes that delete, archive, or pay anything.
 // - The only writes: a task's Status or Top 3, a new task, a new sleep entry,
-//   a new bill, and a bill's Paid box (the owner chose to allow this; the
+//   a new bill, a new or edited job application, and a bill's Paid box (the owner chose to allow this; the
 //   page asks for a second tap first).
 //   Each checks its input, and none of them retries on its own.
 // - Errors are logged as short codes only, never tokens or row content.
 
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
+import { JOB_STATUSES } from "../shared/types.js";
 import type { CalendarRangeResponse, CalendarResponse, ListResponse, ProjectContentResponse } from "../shared/types.js";
-import { BILL_REPEATS, BILL_TYPES, NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
+import { BILL_REPEATS, BILL_TYPES, type JobInput, NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
 import { sampleCalendar, sampleData, sampleNotes } from "./sample.js";
 import { authUrl, exchangeCode, GoogleFail, midnight, readRange, readToday, type GoogleConfig } from "./google.js";
 import { addDays, todayStr } from "../shared/dates.js";
@@ -146,6 +147,45 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     catch (e) { return writeFail(c, "new task", e); }
   });
 
+  /** Checks a job application form. Returns the clean values, or a reason it was refused. */
+  function jobInput(b: Record<string, unknown> | null): JobInput | string {
+    const str = (k: string, max: number) => { const v = b?.[k]; return v == null ? "" : typeof v === "string" && v.trim().length <= max ? v.trim() : null; };
+    const date = (k: string) => { const v = b?.[k]; return v == null || v === "" ? null : isDay(v) ? (v as string) : undefined; };
+    const link = (k: string) => {
+      const v = str(k, 500); if (v === null) return undefined; if (!v) return null;
+      try { const u = new URL(/^[a-z]+:/i.test(v) ? v : "https://" + v); return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : undefined; } catch { return undefined; }
+    };
+    const company = str("company", 120), role = str("role", 200), status = str("status", 40), next = str("next", 500),
+      contactName = str("contactName", 200), notes = str("notes", 2000);
+    const applied = date("applied"), followUp = date("followUp"), contactLink = link("contactLink"), postingLink = link("postingLink");
+    if (!company) return "company";
+    if (role === null || next === null || contactName === null || notes === null) return "text";
+    if (status === null || (status && !(JOB_STATUSES as readonly string[]).includes(status))) return "status";
+    if (applied === undefined || followUp === undefined) return "date";
+    if (contactLink === undefined || postingLink === undefined) return "link";
+    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes };
+  }
+
+  app.post("/api/jobs", async (c) => {
+    const j = jobInput(await body(c));
+    if (typeof j === "string") return bad(c, j);
+    const dm = await writeDemo(c); if (dm instanceof Response) return dm;
+    const notion = opts.notion(c);
+    if (!notion) return c.json({ ok: true, source: "sample" });
+    try { await notion.createJob(j); return c.json({ ok: true, source: "live" }); }
+    catch (e) { return writeFail(c, "new job", e); }
+  });
+
+  app.post("/api/jobs/:id", async (c) => {
+    const j = jobInput(await body(c));
+    if (typeof j === "string") return bad(c, j);
+    const dm = await writeDemo(c); if (dm instanceof Response) return dm;
+    const notion = opts.notion(c);
+    if (!notion) return c.json({ ok: true, source: "sample" });
+    try { await notion.updateJob(c.req.param("id"), j); return c.json({ ok: true, source: "live" }); }
+    catch (e) { return writeFail(c, "edit job", e); }
+  });
+
   app.post("/api/bills/:id/paid", async (c) => {
     const b = await body(c);
     if (typeof b?.paid !== "boolean") return bad(c, "paid");
@@ -227,7 +267,7 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
   app.get("/api/projects", list("projects"));
   app.get("/api/bills", list("bills"));
   app.get("/api/sleep", list("sleep"));
-  app.get("/api/jobs", list("jobs")); // read only: there are no job write routes
+  app.get("/api/jobs", list("jobs"));
   app.get("/api/calendar", async (c) => {
     const d = await demo(c);
     if (d instanceof Response) return d;

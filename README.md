@@ -49,9 +49,9 @@ Before signing up, check https://www.cloudflare.com/plans/developer-platform/ an
 
 Every push to `main` deploys a new version automatically, through the GitHub Action.
 
-## Job Applications (read only)
+## Job Applications
 
-The jobs tab reads the "Job Applications" database in the Life planner. Its properties are Company (title), Role, Status (Interested, Applied, Interviewing, Offer, Rejected, Withdrawn), Date applied, Follow-up date, Next step, Contact name, Contact link, Job posting link, and Notes. The app only reads it. Add and edit applications in Notion.
+The jobs tab reads the "Job Applications" database in the Life planner. Its properties are Company (title), Role, Status (Interested, Applied, Interviewing, Offer, Rejected, Withdrawn), Date applied, Follow-up date, Next step, Contact name, Contact link, Job posting link, and Notes. The jobs tab can add an application and edit any field of an existing one. It never deletes anything. Every save goes straight to Notion, is sent once, and is checked first: a company name is required, dates must be real dates, and links must be web addresses.
 
 Like the other databases, it must be shared with the integration: open the integration at https://www.notion.so/profile/integrations, then Access, and add Job Applications.
 

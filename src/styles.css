@@ -202,6 +202,7 @@ table.rates td.top .chip { display: inline-block; font-weight: 700; background: 
 
 form { display: grid; gap: 10px; }
 label { display: grid; gap: 4px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+textarea { font: inherit; font-size: 16px; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 6px; padding: 6px 10px; width: 100%; min-width: 0; resize: vertical; }
 input, select { font: inherit; font-size: 16px; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 6px; padding: 6px 10px; width: 100%; min-width: 0; min-height: 38px; }
 ::placeholder { color: var(--ink); opacity: 0.45; font-style: italic; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
