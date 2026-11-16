@@ -625,7 +625,7 @@ function jobForm(title: string): string {
     `<label for="job-status">Status<select id="job-status" data-job="status"><option value="">none</option>${JOB_STATUSES.map((st) => `<option${d.status === st ? " selected" : ""}>${st}</option>`).join("")}</select></label>` +
     field("applied", "Date applied", "date") + field("followUp", "Follow-up date", "date") + "</div>" +
     field("next", "Next step", "text", ' maxlength="500"') +
-    '<div class="fields">' + field("contactName", "Contact name", "text", ' maxlength="200"') + field("contactLink", "Contact link", "text", ' inputmode="url" placeholder="linkedin.com/in/..."') + "</div>" +
+    '<div class="fields">' + field("contactName", "Contact name", "text", ' maxlength="200"') + field("contactLink", "Contact link or email", "text", ' inputmode="email" placeholder="linkedin.com/in/... or name@company.com"') + "</div>" +
     field("postingLink", "Job posting link", "text", ' inputmode="url" placeholder="company.com/careers/..."') +
     `<label for="job-notes">Notes<textarea id="job-notes" data-job="notes" rows="3" maxlength="2000">${esc(d.notes)}</textarea></label>` +
     `<div class="row"><button class="btn" type="submit"${busy ? " disabled" : ""}>${busy ? "saving" : "save to Notion"}</button><button class="btn soft" type="button" data-act="jobcancel">cancel</button></div>` +
@@ -676,7 +676,7 @@ function jobsView(): string {
       (j.notes ? `<div><span class="meta">notes</span> ${esc(j.notes)}</div>` : "") + "</div>" +
       `<div class="row">` +
       (j.postingLink ? `<a class="btn go" href="${esc(j.postingLink)}" target="_blank" rel="noopener noreferrer">job posting</a>` : "") +
-      (j.contactLink ? `<a class="btn go" href="${esc(j.contactLink)}" target="_blank" rel="noopener noreferrer">contact</a>` : "") +
+      (j.contactLink ? `<a class="btn go" href="${esc(j.contactLink)}" target="_blank" rel="noopener noreferrer">${j.contactLink.startsWith("mailto:") ? "email contact" : "contact"}</a>` : "") +
       `<a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
     if (S.jobEdit === j.id) return jobForm("edit_" + fileName(j.company + " " + j.role));
     const w = win(fileName(j.company + " " + j.role), color, body.replace(/<a class="link" href="[^"]*" target="_blank" rel="noopener noreferrer">open in Notion<\/a><\/div>$/,
@@ -857,7 +857,7 @@ function openJobForm(id: string) {
   if (id !== "new" && !j) return;
   S.jobDraft = j ? {
     company: j.company, role: j.role, status: j.status, applied: j.applied || "", followUp: j.followUp || "", next: j.next,
-    contactName: j.contactName, contactLink: j.contactLink || "", postingLink: j.postingLink || "", notes: j.notes,
+    contactName: j.contactName, contactLink: (j.contactLink || "").replace(/^mailto:/, ""), postingLink: j.postingLink || "", notes: j.notes,
   } : emptyJobDraft();
   S.jobEdit = id; render();
   document.getElementById("job-company")?.focus();

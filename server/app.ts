@@ -13,7 +13,7 @@ import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { JOB_STATUSES } from "../shared/types.js";
 import type { CalendarRangeResponse, CalendarResponse, ListResponse, ProjectContentResponse } from "../shared/types.js";
-import { BILL_REPEATS, BILL_TYPES, type JobInput, NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
+import { BILL_REPEATS, BILL_TYPES, cleanLink, type JobInput, NotionFail, TASK_STATUSES, TIME_BLOCKS, type NotionReader } from "./notion.js";
 import { sampleCalendar, sampleData, sampleNotes } from "./sample.js";
 import { authUrl, exchangeCode, GoogleFail, midnight, readRange, readToday, type GoogleConfig } from "./google.js";
 import { addDays, todayStr } from "../shared/dates.js";
@@ -153,7 +153,7 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     const date = (k: string) => { const v = b?.[k]; return v == null || v === "" ? null : isDay(v) ? (v as string) : undefined; };
     const link = (k: string) => {
       const v = str(k, 500); if (v === null) return undefined; if (!v) return null;
-      try { const u = new URL(/^[a-z]+:/i.test(v) ? v : "https://" + v); return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : undefined; } catch { return undefined; }
+      return cleanLink(v) ?? undefined;
     };
     const company = str("company", 120), role = str("role", 200), status = str("status", 40), next = str("next", 500),
       contactName = str("contactName", 200), notes = str("notes", 2000);

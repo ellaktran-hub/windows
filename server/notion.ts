@@ -309,12 +309,26 @@ export function jobProps(j: JobInput): Record<string, unknown> {
   };
 }
 
-/** A link property, kept only when it is a normal web address. */
+/**
+ * Keeps a link only when it is a web address or an email address.
+ * "name@site.com" becomes a mailto link; "site.com/page" becomes https.
+ */
+export function cleanLink(raw: string): string | null {
+  const u = raw.trim();
+  if (!u) return null;
+  if (/^[^\s@:/]+@[^\s@/]+\.[^\s@/]+$/.test(u)) return "mailto:" + u;
+  try {
+    const x = new URL(/^[a-z][a-z0-9+.-]*:/i.test(u) ? u : "https://" + u);
+    if (x.protocol === "mailto:") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(decodeURIComponent(x.pathname)) ? x.toString() : null;
+    return x.protocol === "https:" || x.protocol === "http:" ? x.toString() : null;
+  } catch { return null; }
+}
+
+/** A link property, kept only when it is a web or email address. */
 export const webLink = (v: any): string | null => {
   const u = v?.type === "url" && typeof v.url === "string" ? v.url.trim() : "";
   if (!u) return null;
-  try { const x = new URL(/^[a-z]+:/i.test(u) ? u : "https://" + u); return x.protocol === "https:" || x.protocol === "http:" ? x.toString() : null; }
-  catch { return null; }
+  return cleanLink(u);
 };
 export function normJob(p: NotionPage): Job {
   return {

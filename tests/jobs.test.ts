@@ -79,3 +79,13 @@ test("job writes go only to real Job Applications rows", async () => {
   await assert.rejects(n.updateJob("dddddddddddddddddddddddddddddddd", input));
   assert.equal(seen.length, 3, "no PATCH for a row outside Job Applications");
 });
+
+test("contact links can be web or email addresses", async () => {
+  const { cleanLink } = await import("../server/notion.js");
+  assert.equal(cleanLink("sgoldman@ptc.com"), "mailto:sgoldman@ptc.com");
+  assert.equal(cleanLink("mailto:sgoldman@ptc.com"), "mailto:sgoldman@ptc.com");
+  assert.equal(cleanLink("linkedin.com/in/x"), "https://linkedin.com/in/x");
+  assert.equal(cleanLink("javascript:alert(1)"), null);
+  assert.equal(cleanLink("mailto:not-an-email"), null);
+  assert.equal(webLink({ type: "url", url: "mailto:sgoldman@ptc.com" }), "mailto:sgoldman@ptc.com");
+});
