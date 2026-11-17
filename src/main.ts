@@ -612,10 +612,10 @@ function cardsView(): string {
 // (never delete). Every save goes to Notion and the page re-reads it.
 type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; notes: string;
   priority: string; posted: string; lastContacted: string; how: string[]; setup: string; location: string;
-  contactEmail: string; contactPhone: string; salary: string; requirements: string };
+  contactEmail: string; contactPhone: string; salary: string; requirements: string; postedPay: string; term: string; startDate: string };
 function emptyJobDraft(): JobDraft {
   return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", notes: "",
-    priority: "Medium", posted: "", lastContacted: "", how: [], setup: "", location: "", contactEmail: "", contactPhone: "", salary: "", requirements: "" };
+    priority: "Medium", posted: "", lastContacted: "", how: [], setup: "", location: "", contactEmail: "", contactPhone: "", salary: "", requirements: "", postedPay: "", term: "", startDate: "" };
 }
 function jobForm(title: string): string {
   const d = S.jobDraft, busy = !!S.busy.job;
@@ -635,7 +635,9 @@ function jobForm(title: string): string {
     '<div class="fields">' + field("contactEmail", "Email", "email", ' inputmode="email" maxlength="200"') + field("contactPhone", "Phone", "tel", ' inputmode="tel" maxlength="40"') + "</div>" +
     field("contactLink", "Profile link", "text", ' inputmode="url" placeholder="linkedin.com/in/..."') + "</fieldset>" +
     field("postingLink", "Job posting link", "text", ' inputmode="url" placeholder="company.com/careers/..."') +
-    field("salary", "Salary expectations", "text", ' maxlength="300" placeholder="like $25 an hour"') +
+    '<div class="fields">' + field("term", "Term", "text", ' maxlength="80" placeholder="like Summer 2027"') + field("startDate", "Start date", "date") + "</div>" +
+    '<div class="fields">' + field("postedPay", "Posted pay", "text", ' maxlength="300" placeholder="what the posting says"') +
+    field("salary", "My salary expectations", "text", ' maxlength="300" placeholder="like $25 an hour"') + "</div>" +
     `<label for="job-requirements">Key requirements (one per line)<textarea id="job-requirements" data-job="requirements" rows="3" maxlength="2000">${esc(d.requirements)}</textarea></label>` +
     `<label for="job-notes">Extra notes<textarea id="job-notes" data-job="notes" rows="2" maxlength="2000">${esc(d.notes)}</textarea></label>` +
     `<div class="row"><button class="btn" type="submit"${busy ? " disabled" : ""}>${busy ? "saving" : "save to Notion"}</button><button class="btn soft" type="button" data-act="jobcancel">cancel</button></div>` +
@@ -695,12 +697,14 @@ function jobsView(): string {
     const body =
       `<div class="mid">${esc(j.company)}</div>` + (j.role ? `<div class="meta">${esc(j.role)}</div>` : "") +
       `<div class="row">${tags}</div>` +
-      (j.setup || j.location ? `<div class="where"><span class="meta">where</span> ${esc([j.setup.toLowerCase(), j.location].filter(Boolean).join(" · "))}</div>` : "") + how +
+      (j.setup || j.location ? `<div class="where"><span class="meta">where</span> ${esc([j.setup.toLowerCase(), j.location].filter(Boolean).join(" · "))}</div>` : "") +
+      (j.term || j.startDate ? `<div class="where"><span class="meta">when</span> ${esc([j.term, j.startDate ? "starts " + lbl(j.startDate) : ""].filter(Boolean).join(" · "))}</div>` : "") + how +
       `<div class="follow"><span class="meta">follow-up</span><span class="row">${followHtml(j, t)}</span></div>` +
       (j.next ? `<div class="stack tight"><span class="meta">next step</span><div class="step">${esc(j.next)}</div></div>` : "") +
       `<div class="facts">${dates}</div>` +
       section("contact", contact) +
-      section("salary expectations", j.salary ? `<div>${esc(j.salary)}</div>` : "") +
+      section("pay", (j.postedPay ? `<div><span class="meta">posted</span> ${esc(j.postedPay)}</div>` : "") +
+        (j.salary ? `<div><span class="meta">my expectation</span> ${esc(j.salary)}</div>` : "")) +
       section("key requirements", reqs) +
       section("extra notes", j.notes ? `<div>${esc(j.notes)}</div>` : "") +
       `<div class="row">` +
@@ -902,6 +906,7 @@ function openJobForm(id: string) {
     contactName: j.contactName, contactLink: (j.contactLink || "").replace(/^mailto:/, ""), postingLink: j.postingLink || "", notes: j.notes,
     priority: j.priority, posted: j.posted, lastContacted: j.lastContacted || "", how: j.how.slice(), setup: j.setup, location: j.location,
     contactEmail: j.contactEmail, contactPhone: j.contactPhone, salary: j.salary, requirements: j.requirements,
+    postedPay: j.postedPay, term: j.term, startDate: j.startDate || "",
   } : emptyJobDraft();
   S.jobEdit = id; render();
   document.getElementById("job-company")?.focus();
@@ -915,6 +920,7 @@ async function saveJob() {
     next: d.next.trim(), contactName: d.contactName.trim(), contactLink: d.contactLink.trim(), postingLink: d.postingLink.trim(), notes: d.notes.trim(),
     priority: d.priority, posted: d.posted, lastContacted: d.lastContacted || null, how: d.how, setup: d.setup, location: d.location.trim(),
     contactEmail: d.contactEmail.trim(), contactPhone: d.contactPhone.trim(), salary: d.salary.trim(), requirements: d.requirements.trim(),
+    postedPay: d.postedPay.trim(), term: d.term.trim(), startDate: d.startDate || null,
   };
   if (!isLive(S.jobs)) { S.jobEdit = ""; render(); toast(SAMPLE_NOTE); return; }
   S.busy.job = true; render();

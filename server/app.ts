@@ -172,12 +172,15 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     if (contactEmail === null || (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail))) return "email";
     if (contactPhone === null || (contactPhone && !/^[0-9+().\-\s x]{4,40}$/i.test(contactPhone))) return "phone";
     if (salary === null || requirements === null) return "text";
+    const postedPay = str("postedPay", 300), term = str("term", 80), startDate = date("startDate");
+    if (postedPay === null || term === null) return "text";
+    if (startDate === undefined) return "date";
     if (!company) return "company";
     if (role === null || next === null || contactName === null || notes === null) return "text";
     if (status === null || (status && !(JOB_STATUSES as readonly string[]).includes(status))) return "status";
     if (applied === undefined || followUp === undefined) return "date";
     if (contactLink === undefined || postingLink === undefined) return "link";
-    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes, priority, how, posted, lastContacted, setup, location, contactEmail, contactPhone, salary, requirements };
+    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes, priority, how, posted, lastContacted, setup, location, contactEmail, contactPhone, salary, requirements, postedPay, term, startDate };
   }
 
   app.post("/api/jobs", async (c) => {

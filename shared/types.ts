@@ -73,6 +73,9 @@ export interface Job {
   contactPhone: string;
   salary: string; // salary expectations
   requirements: string; // key requirements, one per line
+  postedPay: string;
+  term: string; // like "Summer 2027"
+  startDate: string | null; // YYYY-MM-DD, from Notion
 }
 
 export interface Appointment {

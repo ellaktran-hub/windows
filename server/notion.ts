@@ -296,6 +296,7 @@ export interface JobInput {
   next: string; contactName: string; contactLink: string | null; postingLink: string | null; notes: string;
   priority: string; how: string[]; posted: string; lastContacted: string | null; setup: string; location: string;
   contactEmail: string; contactPhone: string; salary: string; requirements: string;
+  postedPay: string; term: string; startDate: string | null;
 }
 const rtProp = (v: string) => ({ rich_text: v ? [{ text: { content: v } }] : [] });
 /** Every field is sent, so clearing one in the form clears it in Notion. */
@@ -321,6 +322,9 @@ export function jobProps(j: JobInput): Record<string, unknown> {
     "Contact phone": { phone_number: j.contactPhone || null },
     "Salary expectations": rtProp(j.salary),
     "Key requirements": rtProp(j.requirements),
+    "Posted pay": rtProp(j.postedPay),
+    Term: rtProp(j.term),
+    "Start date": { date: j.startDate ? { start: j.startDate } : null },
   };
 }
 
@@ -368,6 +372,9 @@ export function normJob(p: NotionPage): Job {
     contactPhone: phoneOf(prop(p, "Contact phone")),
     salary: text(prop(p, "Salary expectations")),
     requirements: text(prop(p, "Key requirements")),
+    postedPay: text(prop(p, "Posted pay")),
+    term: text(prop(p, "Term")),
+    startDate: day(prop(p, "Start date")),
   };
 }
 
