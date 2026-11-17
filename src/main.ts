@@ -47,7 +47,8 @@ const S = {
   confirmPaid: "", // the bill waiting for its second "mark paid" tap
   doneToday: slot<Task[]>(), // tasks finished today, from Notion
   jobs: slot<Job[]>(), // Job Applications, read only
-  jobFilter: "all", // a status, or "all"
+  jobFilters: { company: "", status: "", priority: "", setup: "" } as Record<JobFilterKey, string>, // "" means any
+  glanceCols: [] as string[], // columns chosen for at_a_glance.txt (loaded below, once the list exists)
   jobSort: "priority" as "priority" | "status" | "followup",
   jobEdit: "", // "" when no form is open, "new" for a new application, or the id being edited
   jobDraft: emptyJobDraft(),
@@ -644,6 +645,49 @@ function jobForm(title: string): string {
     "</form>", true);
 }
 
+type JobFilterKey = "company" | "status" | "priority" | "setup";
+
+// Columns you can choose for at_a_glance.txt. The job name is always shown.
+const GLANCE_COLS: Array<{ key: string; label: string; cell: (j: Job, t: string) => string }> = [
+  { key: "status", label: "status", cell: (j) => j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : "" },
+  { key: "priority", label: "priority", cell: (j) => j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${esc(j.priority.toLowerCase())}</span>` : "" },
+  { key: "followup", label: "follow-up", cell: (j, t) => glanceFollow(j, t) },
+  { key: "pay", label: "pay", cell: (j) => esc(j.postedPay) },
+  { key: "expectation", label: "my expectation", cell: (j) => esc(j.salary) },
+  { key: "location", label: "location", cell: (j) => esc(j.location) },
+  { key: "setup", label: "work setup", cell: (j) => esc(j.setup.toLowerCase()) },
+  { key: "term", label: "term", cell: (j) => esc(j.term) },
+  { key: "start", label: "start", cell: (j) => j.startDate ? esc(lbl(j.startDate)) : "" },
+  { key: "applied", label: "applied", cell: (j) => j.applied ? esc(lbl(j.applied)) : "" },
+  { key: "contacted", label: "last contacted", cell: (j) => j.lastContacted ? esc(lbl(j.lastContacted)) : "" },
+  { key: "contact", label: "contact", cell: (j) => esc(j.contactName) },
+  { key: "how", label: "how I applied", cell: (j) => esc(j.how.map((h) => h.toLowerCase()).join(", ")) },
+  { key: "next", label: "next step", cell: (j) => esc(j.next) },
+];
+const GLANCE_DEFAULT = ["status", "priority", "followup"];
+/** Remembered on this phone only (a per-viewer convenience); falls back quietly if storage is blocked. */
+function loadGlanceCols(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem("hw.glanceCols") || "null");
+    if (Array.isArray(v) && v.every((k) => GLANCE_COLS.some((c) => c.key === k))) return v;
+  } catch { /* storage unavailable */ }
+  return GLANCE_DEFAULT.slice();
+}
+function saveGlanceCols() { try { localStorage.setItem("hw.glanceCols", JSON.stringify(S.glanceCols)); } catch { /* ignore */ } }
+S.glanceCols = loadGlanceCols();
+function glanceFollow(j: Job, t: string): string {
+  if (!j.followUp) return "";
+  const f = R.followUp(j, t);
+  if (f.kind === "overdue") return '<span class="tag peach">overdue</span>';
+  if (f.kind === "today") return '<span class="tag butter">today</span>';
+  return `<span${f.kind === "soon" ? ' class="tag mint"' : f.kind === "later" ? ' class="tag lilac"' : ""}>${esc(lbl(j.followUp))}</span>`;
+}
+function filterJobs(all: Job[]): Job[] {
+  const f = S.jobFilters;
+  return all.filter((j) => (!f.company || j.company === f.company) && (!f.status || j.status === f.status) &&
+    (!f.priority || j.priority === f.priority) && (!f.setup || j.setup === f.setup));
+}
+
 const JOBS_NOTION = "https://www.notion.so/41a50e78d6d481878d3fefdcc714f46d";
 // Title bar colors where they differ from the status tag colors.
 const JOB_BAR: Record<string, string> = { Applied: "pink" };
@@ -670,11 +714,18 @@ function jobsView(): string {
     `<div class="counts">${JOB_STATUSES.map((st) => `<div class="count"><span class="num">${counts[st]}</span><span class="meta">${esc(st.toLowerCase())}</span></div>`).join("")}` +
     `<div class="count all"><span class="num">${all.length}</span><span class="meta">all</span></div></div>`, true);
   const chip = (act: string, v: string, label: string, on: boolean) => `<button class="day" type="button" data-act="${act}" data-v="${esc(v)}" aria-pressed="${on}">${esc(label)}</button>`;
-  const controls = '<div class="status"><div class="days" role="group" aria-label="Show">' +
-    chip("jobfilter", "all", "all", S.jobFilter === "all") + JOB_STATUSES.map((s) => chip("jobfilter", s, s.toLowerCase(), S.jobFilter === s)).join("") + "</div></div>" +
-    '<div class="status"><span class="meta">sort</span><div class="days" role="group" aria-label="Sort by">' +
+  // Filters: company, status, priority, work setup.
+  const companies = [...new Set(all.map((j) => j.company))].sort((a, b) => a.localeCompare(b));
+  const sel = (k: JobFilterKey, label: string, opts: readonly string[]) =>
+    `<label for="jf-${k}">${label}<select id="jf-${k}" data-jfilter="${k}"><option value="">any</option>${opts.map((o) => `<option${S.jobFilters[k] === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
+  const anyFilter = Object.values(S.jobFilters).some(Boolean);
+  const filters = win("filter.exe", "sky",
+    '<div class="fields">' + sel("company", "Company", companies) + sel("status", "Status", JOB_STATUSES) + sel("priority", "Priority", JOB_PRIORITIES) + sel("setup", "Work setup", JOB_SETUP) + "</div>" +
+    (anyFilter ? '<div><button class="btn soft" type="button" data-act="jobclear">clear filters</button></div>' : ""), true);
+  const controls = '<div class="status"><span class="meta">sort</span><div class="days" role="group" aria-label="Sort by">' +
     chip("jobsort", "priority", "priority", S.jobSort === "priority") + chip("jobsort", "followup", "follow-up date", S.jobSort === "followup") + chip("jobsort", "status", "status", S.jobSort === "status") + "</div></div>";
-  const shown = R.sortJobs(S.jobFilter === "all" ? all : all.filter((j) => j.status === S.jobFilter), S.jobSort);
+  const filtered = filterJobs(all);
+  const shown = R.sortJobs(filtered, S.jobSort);
   // One window per application, colored by status.
   const boxes = shown.map((j) => {
     const f = R.followUp(j, t);
@@ -717,21 +768,19 @@ function jobsView(): string {
     const wi = w.replace('<section class="win"', `<section class="win" id="j-${esc(j.id)}"`);
     return f.kind === "overdue" ? wi.replace('<section class="win"', '<section class="win late"') : wi;
   }).join("");
-  const table = boxes || win("applications.txt", "butter", `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
-  // One compact overview of every application, in the same order as the windows below.
-  const glanceRows = R.sortJobs(all, "priority").map((j) => {
-    const f = R.followUp(j, t);
-    const fu = !j.followUp ? ""
-      : f.kind === "overdue" ? '<span class="tag peach">overdue</span>' : f.kind === "today" ? '<span class="tag butter">today</span>'
-      : `<span${f.kind === "soon" ? ' class="tag mint"' : f.kind === "later" ? ' class="tag lilac"' : ""}>${esc(lbl(j.followUp))}</span>`;
-    return `<tr><td><a class="plain golink" href="#jobs" data-act="jobjump" data-id="${esc(j.id)}">${esc(j.company)}</a><div class="meta">${esc(j.role)}</div></td>` +
-      `<td>${j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : ""}</td>` +
-      `<td>${j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${esc(j.priority.toLowerCase())}</span>` : ""}</td>` +
-      `<td>${fu}</td></tr>`;
-  }).join("");
+  const table = boxes || win("applications.txt", "butter", `<div class="soft">${all.length ? "No jobs match these filters." : "No applications yet. Add one with add a job."}</div>`, true);
+  // A compact table of the filtered jobs, with the columns you pick.
+  const cols = GLANCE_COLS.filter((c) => S.glanceCols.includes(c.key));
+  const colChips = '<div class="days" role="group" aria-label="Columns">' + GLANCE_COLS.map((c) => chip("glancecol", c.key, c.label, S.glanceCols.includes(c.key))).join("") + "</div>";
+  const glanceRows = R.sortJobs(filtered, "priority").map((j) =>
+    `<tr><td><a class="plain golink" href="#jobs" data-act="jobjump" data-id="${esc(j.id)}">${esc(j.company)}</a><div class="meta">${esc(j.role)}</div></td>` +
+    cols.map((c) => `<td>${c.cell(j, t)}</td>`).join("") + "</tr>").join("");
   const glance = all.length ? win("at_a_glance.txt", "pink",
-    `<div class="tablewrap"><table class="glance"><thead><tr><th>job</th><th>status</th><th>priority</th><th>follow-up</th></tr></thead><tbody>${glanceRows}</tbody></table></div>`, true) : "";
-  return note + glance + countsW + top + controls + table;
+    '<span class="meta">show columns</span>' + colChips +
+    (filtered.length
+      ? `<div class="tablewrap"><table class="glance"><thead><tr><th>job</th>${cols.map((c) => `<th>${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${glanceRows}</tbody></table></div>`
+      : '<div class="soft">No jobs match these filters.</div>'), true) : "";
+  return note + filters + glance + countsW + top + controls + table;
 }
 
 function view(): string {
@@ -992,10 +1041,16 @@ app.addEventListener("click", (e) => {
   else if (a === "week") { S.weekOpen = !S.weekOpen; render(); }
   else if (a === "paid") void setPaid(id, true);
   else if (a === "unpaid") void setPaid(id, false);
-  else if (a === "jobfilter") { S.jobFilter = (JOB_STATUSES as readonly string[]).includes(b.dataset.v || "") ? b.dataset.v! : "all"; render(); }
+  else if (a === "jobclear") { S.jobFilters = { company: "", status: "", priority: "", setup: "" }; render(); }
+  else if (a === "glancecol") {
+    const k = b.dataset.v || "";
+    if (GLANCE_COLS.some((c) => c.key === k)) {
+      S.glanceCols = S.glanceCols.includes(k) ? S.glanceCols.filter((x) => x !== k) : GLANCE_COLS.map((c) => c.key).filter((x) => x === k || S.glanceCols.includes(x));
+      saveGlanceCols(); render();
+    }
+  }
   else if (a === "jobjump") {
     e.preventDefault();
-    if (S.jobFilter !== "all") { S.jobFilter = "all"; render(); }
     const el = document.getElementById("j-" + id);
     if (el) {
       el.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -1031,6 +1086,8 @@ app.addEventListener("input", (e) => {
 });
 app.addEventListener("change", (e) => {
   const jt = e.target as HTMLSelectElement;
+  const jf = jt.dataset?.jfilter as JobFilterKey | undefined;
+  if (jf && jf in S.jobFilters) { S.jobFilters[jf] = jt.value; render(); return; }
   const jsel = jt.dataset?.job;
   if (jsel === "status" || jsel === "priority" || jsel === "posted" || jsel === "setup") S.jobDraft[jsel] = jt.value;
   const hwc = (jt as unknown as HTMLInputElement).dataset?.jobhow;

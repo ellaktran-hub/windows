@@ -199,9 +199,10 @@ table.rates td.top .chip { display: inline-block; font-weight: 700; background: 
 table.glance { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.glance th { text-align: left; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 0 4px 6px; border-bottom: 2px solid var(--ink); white-space: nowrap; }
 table.glance td { padding: 7px 4px; border-bottom: 2px dashed rgba(90, 51, 38, 0.2); vertical-align: top; }
-table.glance td:first-child { overflow-wrap: anywhere; }
+table.glance td:first-child { min-width: 118px; overflow-wrap: break-word; }
 table.glance td:first-child .meta { font-size: 11px; }
-table.glance td:not(:first-child) { white-space: nowrap; }
+table.glance td:not(:first-child) { min-width: 64px; overflow-wrap: break-word; }
+table.glance .tag { white-space: nowrap; }
 table.glance .tag { font-size: 11px; padding: 0 5px; }
 .jsec { display: grid; gap: 4px; padding-top: 10px; border-top: 2px dashed rgba(90, 51, 38, 0.25); overflow-wrap: anywhere; }
 .jsec .meta-line { font-size: 13px; opacity: 0.85; }
