@@ -692,16 +692,16 @@ function jobsView(): string {
       (j.contactPhone ? `<div class="meta-line">${esc(j.contactPhone)}</div>` : "") +
       (contactBtns ? `<div class="row">${contactBtns}</div>` : "");
     const reqs = j.requirements ? stepLines(j.requirements) : "";
-    const dates = `<div><span class="meta">applied</span> ${j.applied ? esc(lbl(j.applied) + " · " + rel(j.applied, t)) : "not yet"}</div>` +
+    const dates = (j.applied ? `<div><span class="meta">applied</span> ${esc(lbl(j.applied) + " · " + rel(j.applied, t))}</div>` : "") +
       (j.lastContacted ? `<div><span class="meta">last contacted</span> ${esc(lbl(j.lastContacted) + " · " + rel(j.lastContacted, t))}</div>` : "");
     const body =
       `<div class="mid">${esc(j.company)}</div>` + (j.role ? `<div class="meta">${esc(j.role)}</div>` : "") +
-      `<div class="row">${tags}</div>` +
+      (tags ? `<div class="row">${tags}</div>` : "") +
       (j.setup || j.location ? `<div class="where"><span class="meta">where</span> ${esc([j.setup.toLowerCase(), j.location].filter(Boolean).join(" · "))}</div>` : "") +
       (j.term || j.startDate ? `<div class="where"><span class="meta">when</span> ${esc([j.term, j.startDate ? "starts " + lbl(j.startDate) : ""].filter(Boolean).join(" · "))}</div>` : "") + how +
-      `<div class="follow"><span class="meta">follow-up</span><span class="row">${followHtml(j, t)}</span></div>` +
+      (j.followUp ? `<div class="follow"><span class="meta">follow-up</span><span class="row">${followHtml(j, t)}</span></div>` : "") +
       (j.next ? `<div class="stack tight"><span class="meta">next step</span><div class="step">${esc(j.next)}</div></div>` : "") +
-      `<div class="facts">${dates}</div>` +
+      (dates ? `<div class="facts">${dates}</div>` : "") +
       section("contact", contact) +
       section("pay", (j.postedPay ? `<div><span class="meta">posted</span> ${esc(j.postedPay)}</div>` : "") +
         (j.salary ? `<div><span class="meta">my expectation</span> ${esc(j.salary)}</div>` : "")) +
@@ -720,7 +720,7 @@ function jobsView(): string {
   // One compact overview of every application, in the same order as the windows below.
   const glanceRows = R.sortJobs(all, "priority").map((j) => {
     const f = R.followUp(j, t);
-    const fu = !j.followUp ? '<span class="meta">none</span>'
+    const fu = !j.followUp ? ""
       : f.kind === "overdue" ? '<span class="tag peach">overdue</span>' : f.kind === "today" ? '<span class="tag butter">today</span>'
       : `<span${f.kind === "soon" ? ' class="tag mint"' : ""}>${esc(lbl(j.followUp))}</span>`;
     return `<tr><td><a class="plain golink" href="#jobs" data-act="jobjump" data-id="${esc(j.id)}">${esc(j.company)}</a><div class="meta">${esc(j.role)}</div></td>` +
