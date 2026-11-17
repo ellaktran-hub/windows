@@ -71,7 +71,6 @@ export interface Job {
   location: string;
   contactEmail: string;
   contactPhone: string;
-  salary: string; // salary expectations
   requirements: string; // key requirements, one per line
   postedPay: string;
   term: string; // like "Summer 2027"

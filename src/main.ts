@@ -613,10 +613,10 @@ function cardsView(): string {
 // (never delete). Every save goes to Notion and the page re-reads it.
 type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; notes: string;
   priority: string; posted: string; lastContacted: string; how: string[]; setup: string; location: string;
-  contactEmail: string; contactPhone: string; salary: string; requirements: string; postedPay: string; term: string; startDate: string };
+  contactEmail: string; contactPhone: string; requirements: string; postedPay: string; term: string; startDate: string };
 function emptyJobDraft(): JobDraft {
   return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", notes: "",
-    priority: "Medium", posted: "", lastContacted: "", how: [], setup: "", location: "", contactEmail: "", contactPhone: "", salary: "", requirements: "", postedPay: "", term: "", startDate: "" };
+    priority: "Medium", posted: "", lastContacted: "", how: [], setup: "", location: "", contactEmail: "", contactPhone: "", requirements: "", postedPay: "", term: "", startDate: "" };
 }
 function jobForm(title: string): string {
   const d = S.jobDraft, busy = !!S.busy.job;
@@ -637,8 +637,7 @@ function jobForm(title: string): string {
     field("contactLink", "Profile link", "text", ' inputmode="url" placeholder="linkedin.com/in/..."') + "</fieldset>" +
     field("postingLink", "Job posting link", "text", ' inputmode="url" placeholder="company.com/careers/..."') +
     '<div class="fields">' + field("term", "Term", "text", ' maxlength="80" placeholder="like Summer 2027"') + field("startDate", "Start date", "date") + "</div>" +
-    '<div class="fields">' + field("postedPay", "Posted pay", "text", ' maxlength="300" placeholder="what the posting says"') +
-    field("salary", "My salary expectations", "text", ' maxlength="300" placeholder="like $25 an hour"') + "</div>" +
+    field("postedPay", "Posted pay", "text", ' maxlength="300" placeholder="what the posting says"') +
     `<label for="job-requirements">Key requirements (one per line)<textarea id="job-requirements" data-job="requirements" rows="3" maxlength="2000">${esc(d.requirements)}</textarea></label>` +
     `<label for="job-notes">Extra notes<textarea id="job-notes" data-job="notes" rows="2" maxlength="2000">${esc(d.notes)}</textarea></label>` +
     `<div class="row"><button class="btn" type="submit"${busy ? " disabled" : ""}>${busy ? "saving" : "save to Notion"}</button><button class="btn soft" type="button" data-act="jobcancel">cancel</button></div>` +
@@ -653,7 +652,6 @@ const GLANCE_COLS: Array<{ key: string; label: string; cell: (j: Job, t: string)
   { key: "priority", label: "priority", cell: (j) => j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${esc(j.priority.toLowerCase())}</span>` : "" },
   { key: "followup", label: "follow-up", cell: (j, t) => glanceFollow(j, t) },
   { key: "pay", label: "pay", cell: (j) => esc(j.postedPay) },
-  { key: "expectation", label: "my expectation", cell: (j) => esc(j.salary) },
   { key: "location", label: "location", cell: (j) => esc(j.location) },
   { key: "setup", label: "work setup", cell: (j) => esc(j.setup.toLowerCase()) },
   { key: "term", label: "term", cell: (j) => esc(j.term) },
@@ -669,7 +667,7 @@ const GLANCE_DEFAULT = ["status", "priority", "followup"];
 function loadGlanceCols(): string[] {
   try {
     const v = JSON.parse(localStorage.getItem("hw.glanceCols") || "null");
-    if (Array.isArray(v) && v.every((k) => GLANCE_COLS.some((c) => c.key === k))) return v;
+    if (Array.isArray(v)) return v.filter((k) => GLANCE_COLS.some((c) => c.key === k)); // drops columns that no longer exist
   } catch { /* storage unavailable */ }
   return GLANCE_DEFAULT.slice();
 }
@@ -755,8 +753,7 @@ function jobsView(): string {
       (j.next ? `<div class="stack tight"><span class="meta">next step</span><div class="step">${esc(j.next)}</div></div>` : "") +
       (dates ? `<div class="facts">${dates}</div>` : "") +
       section("contact", contact) +
-      section("pay", (j.postedPay ? `<div><span class="meta">posted</span> ${esc(j.postedPay)}</div>` : "") +
-        (j.salary ? `<div><span class="meta">my expectation</span> ${esc(j.salary)}</div>` : "")) +
+      section("posted pay", j.postedPay ? `<div>${esc(j.postedPay)}</div>` : "") +
       section("key requirements", reqs) +
       section("extra notes", j.notes ? `<div>${esc(j.notes)}</div>` : "") +
       `<div class="row">` +
@@ -955,7 +952,7 @@ function openJobForm(id: string) {
     company: j.company, role: j.role, status: j.status, applied: j.applied || "", followUp: j.followUp || "", next: j.next,
     contactName: j.contactName, contactLink: (j.contactLink || "").replace(/^mailto:/, ""), postingLink: j.postingLink || "", notes: j.notes,
     priority: j.priority, posted: j.posted, lastContacted: j.lastContacted || "", how: j.how.slice(), setup: j.setup, location: j.location,
-    contactEmail: j.contactEmail, contactPhone: j.contactPhone, salary: j.salary, requirements: j.requirements,
+    contactEmail: j.contactEmail, contactPhone: j.contactPhone, requirements: j.requirements,
     postedPay: j.postedPay, term: j.term, startDate: j.startDate || "",
   } : emptyJobDraft();
   S.jobEdit = id; render();
@@ -969,7 +966,7 @@ async function saveJob() {
     company: d.company.trim(), role: d.role.trim(), status: d.status, applied: d.applied || null, followUp: d.followUp || null,
     next: d.next.trim(), contactName: d.contactName.trim(), contactLink: d.contactLink.trim(), postingLink: d.postingLink.trim(), notes: d.notes.trim(),
     priority: d.priority, posted: d.posted, lastContacted: d.lastContacted || null, how: d.how, setup: d.setup, location: d.location.trim(),
-    contactEmail: d.contactEmail.trim(), contactPhone: d.contactPhone.trim(), salary: d.salary.trim(), requirements: d.requirements.trim(),
+    contactEmail: d.contactEmail.trim(), contactPhone: d.contactPhone.trim(), requirements: d.requirements.trim(),
     postedPay: d.postedPay.trim(), term: d.term.trim(), startDate: d.startDate || null,
   };
   if (!isLive(S.jobs)) { S.jobEdit = ""; render(); toast(SAMPLE_NOTE); return; }

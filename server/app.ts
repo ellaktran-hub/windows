@@ -168,10 +168,10 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     const setup = str("setup", 20), location = str("location", 120);
     if (setup === null || (setup && !(JOB_SETUP as readonly string[]).includes(setup))) return "setup";
     if (location === null) return "text";
-    const contactEmail = str("contactEmail", 200), contactPhone = str("contactPhone", 40), salary = str("salary", 300), requirements = str("requirements", 2000);
+    const contactEmail = str("contactEmail", 200), contactPhone = str("contactPhone", 40), requirements = str("requirements", 2000);
     if (contactEmail === null || (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail))) return "email";
     if (contactPhone === null || (contactPhone && !/^[0-9+().\-\s x]{4,40}$/i.test(contactPhone))) return "phone";
-    if (salary === null || requirements === null) return "text";
+    if (requirements === null) return "text";
     const postedPay = str("postedPay", 300), term = str("term", 80), startDate = date("startDate");
     if (postedPay === null || term === null) return "text";
     if (startDate === undefined) return "date";
@@ -180,7 +180,7 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     if (status === null || (status && !(JOB_STATUSES as readonly string[]).includes(status))) return "status";
     if (applied === undefined || followUp === undefined) return "date";
     if (contactLink === undefined || postingLink === undefined) return "link";
-    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes, priority, how, posted, lastContacted, setup, location, contactEmail, contactPhone, salary, requirements, postedPay, term, startDate };
+    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes, priority, how, posted, lastContacted, setup, location, contactEmail, contactPhone, requirements, postedPay, term, startDate };
   }
 
   app.post("/api/jobs", async (c) => {

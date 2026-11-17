@@ -295,7 +295,7 @@ export interface JobInput {
   company: string; role: string; status: string; applied: string | null; followUp: string | null;
   next: string; contactName: string; contactLink: string | null; postingLink: string | null; notes: string;
   priority: string; how: string[]; posted: string; lastContacted: string | null; setup: string; location: string;
-  contactEmail: string; contactPhone: string; salary: string; requirements: string;
+  contactEmail: string; contactPhone: string; requirements: string;
   postedPay: string; term: string; startDate: string | null;
 }
 const rtProp = (v: string) => ({ rich_text: v ? [{ text: { content: v } }] : [] });
@@ -320,7 +320,6 @@ export function jobProps(j: JobInput): Record<string, unknown> {
     Location: rtProp(j.location),
     "Contact email": { email: j.contactEmail || null },
     "Contact phone": { phone_number: j.contactPhone || null },
-    "Salary expectations": rtProp(j.salary),
     "Key requirements": rtProp(j.requirements),
     "Posted pay": rtProp(j.postedPay),
     Term: rtProp(j.term),
@@ -370,7 +369,6 @@ export function normJob(p: NotionPage): Job {
     location: text(prop(p, "Location")),
     contactEmail: emailOf(prop(p, "Contact email")),
     contactPhone: phoneOf(prop(p, "Contact phone")),
-    salary: text(prop(p, "Salary expectations")),
     requirements: text(prop(p, "Key requirements")),
     postedPay: text(prop(p, "Posted pay")),
     term: text(prop(p, "Term")),
