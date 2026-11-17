@@ -69,6 +69,10 @@ export interface Job {
   lastContacted: string | null; // YYYY-MM-DD, from Notion
   setup: string; // Remote, Hybrid, In person
   location: string;
+  contactEmail: string;
+  contactPhone: string;
+  salary: string; // salary expectations
+  requirements: string; // key requirements, one per line
 }
 
 export interface Appointment {

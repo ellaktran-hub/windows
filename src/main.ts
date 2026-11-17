@@ -611,10 +611,11 @@ function cardsView(): string {
 // Job Applications: read from the Notion database, with forms to add and edit
 // (never delete). Every save goes to Notion and the page re-reads it.
 type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; notes: string;
-  priority: string; posted: string; lastContacted: string; how: string[]; setup: string; location: string };
+  priority: string; posted: string; lastContacted: string; how: string[]; setup: string; location: string;
+  contactEmail: string; contactPhone: string; salary: string; requirements: string };
 function emptyJobDraft(): JobDraft {
   return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", notes: "",
-    priority: "Medium", posted: "", lastContacted: "", how: [], setup: "", location: "" };
+    priority: "Medium", posted: "", lastContacted: "", how: [], setup: "", location: "", contactEmail: "", contactPhone: "", salary: "", requirements: "" };
 }
 function jobForm(title: string): string {
   const d = S.jobDraft, busy = !!S.busy.job;
@@ -630,9 +631,13 @@ function jobForm(title: string): string {
     `<fieldset class="checks"><legend>How I applied</legend>${JOB_HOW.map((h) => `<label class="check"><input type="checkbox" data-jobhow="${esc(h)}"${d.how.includes(h) ? " checked" : ""}>${esc(h)}</label>`).join("")}</fieldset>` +
     '<div class="fields">' + field("applied", "Date applied", "date") + field("followUp", "Follow-up date", "date") + field("lastContacted", "Last contacted", "date") + "</div>" +
     field("next", "Next step", "text", ' maxlength="500"') +
-    '<div class="fields">' + field("contactName", "Contact name", "text", ' maxlength="200"') + field("contactLink", "Contact link or email", "text", ' inputmode="email" placeholder="linkedin.com/in/... or name@company.com"') + "</div>" +
+    `<fieldset class="checks group"><legend>Contact</legend>` + field("contactName", "Name and role", "text", ' maxlength="200"') +
+    '<div class="fields">' + field("contactEmail", "Email", "email", ' inputmode="email" maxlength="200"') + field("contactPhone", "Phone", "tel", ' inputmode="tel" maxlength="40"') + "</div>" +
+    field("contactLink", "Profile link", "text", ' inputmode="url" placeholder="linkedin.com/in/..."') + "</fieldset>" +
     field("postingLink", "Job posting link", "text", ' inputmode="url" placeholder="company.com/careers/..."') +
-    `<label for="job-notes">Notes<textarea id="job-notes" data-job="notes" rows="3" maxlength="2000">${esc(d.notes)}</textarea></label>` +
+    field("salary", "Salary expectations", "text", ' maxlength="300" placeholder="like $25 an hour"') +
+    `<label for="job-requirements">Key requirements (one per line)<textarea id="job-requirements" data-job="requirements" rows="3" maxlength="2000">${esc(d.requirements)}</textarea></label>` +
+    `<label for="job-notes">Extra notes<textarea id="job-notes" data-job="notes" rows="2" maxlength="2000">${esc(d.notes)}</textarea></label>` +
     `<div class="row"><button class="btn" type="submit"${busy ? " disabled" : ""}>${busy ? "saving" : "save to Notion"}</button><button class="btn soft" type="button" data-act="jobcancel">cancel</button></div>` +
     "</form>", true);
 }
@@ -675,28 +680,53 @@ function jobsView(): string {
       (j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : "") +
       (j.posted ? `<span class="tag">${esc(j.posted.toLowerCase())}</span>` : "");
     const how = j.how.length ? `<div class="howrow"><span class="meta">how I applied</span><span class="row">${j.how.map((h) => `<span class="tag mint">${esc(h.toLowerCase())}</span>`).join("")}</span></div>` : "";
+    const section = (label: string, inner: string) => inner ? `<div class="jsec"><span class="meta">${label}</span>${inner}</div>` : "";
+    const btn = (href: string, label: string, blank = true) => `<a class="btn go" href="${esc(href)}"${blank ? ' target="_blank" rel="noopener noreferrer"' : ""}>${label}</a>`;
+    const contactBtns = (j.contactEmail ? btn("mailto:" + j.contactEmail, "email", false) : "") +
+      (j.contactPhone ? btn("tel:" + j.contactPhone.replace(/[^0-9+]/g, ""), "call", false) : "") +
+      (j.contactLink ? btn(j.contactLink, j.contactLink.startsWith("mailto:") ? "email" : "profile") : "");
+    const contact = (j.contactName ? `<div>${esc(j.contactName)}</div>` : "") +
+      (j.contactEmail ? `<div class="meta-line">${esc(j.contactEmail)}</div>` : "") +
+      (j.contactPhone ? `<div class="meta-line">${esc(j.contactPhone)}</div>` : "") +
+      (contactBtns ? `<div class="row">${contactBtns}</div>` : "");
+    const reqs = j.requirements ? stepLines(j.requirements) : "";
+    const dates = `<div><span class="meta">applied</span> ${j.applied ? esc(lbl(j.applied) + " · " + rel(j.applied, t)) : "not yet"}</div>` +
+      (j.lastContacted ? `<div><span class="meta">last contacted</span> ${esc(lbl(j.lastContacted) + " · " + rel(j.lastContacted, t))}</div>` : "");
     const body =
       `<div class="mid">${esc(j.company)}</div>` + (j.role ? `<div class="meta">${esc(j.role)}</div>` : "") +
       `<div class="row">${tags}</div>` +
       (j.setup || j.location ? `<div class="where"><span class="meta">where</span> ${esc([j.setup.toLowerCase(), j.location].filter(Boolean).join(" · "))}</div>` : "") + how +
       `<div class="follow"><span class="meta">follow-up</span><span class="row">${followHtml(j, t)}</span></div>` +
       (j.next ? `<div class="stack tight"><span class="meta">next step</span><div class="step">${esc(j.next)}</div></div>` : "") +
-      `<div class="facts">` +
-      `<div><span class="meta">applied</span> ${j.applied ? esc(lbl(j.applied) + " · " + rel(j.applied, t)) : "not yet"}</div>` +
-      (j.lastContacted ? `<div><span class="meta">last contacted</span> ${esc(lbl(j.lastContacted) + " · " + rel(j.lastContacted, t))}</div>` : "") +
-      (j.contactName ? `<div><span class="meta">contact</span> ${esc(j.contactName)}</div>` : "") +
-      (j.notes ? `<div><span class="meta">notes</span> ${esc(j.notes)}</div>` : "") + "</div>" +
+      `<div class="facts">${dates}</div>` +
+      section("contact", contact) +
+      section("salary expectations", j.salary ? `<div>${esc(j.salary)}</div>` : "") +
+      section("key requirements", reqs) +
+      section("extra notes", j.notes ? `<div>${esc(j.notes)}</div>` : "") +
       `<div class="row">` +
       (j.postingLink ? `<a class="btn go" href="${esc(j.postingLink)}" target="_blank" rel="noopener noreferrer">job posting</a>` : "") +
-      (j.contactLink ? `<a class="btn go" href="${esc(j.contactLink)}" target="_blank" rel="noopener noreferrer">${j.contactLink.startsWith("mailto:") ? "email contact" : "contact"}</a>` : "") +
       `<a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
     if (S.jobEdit === j.id) return jobForm("edit_" + fileName(j.company + " " + j.role));
     const w = win(fileName(j.company + " " + j.role), color, body.replace(/<a class="link" href="[^"]*" target="_blank" rel="noopener noreferrer">open in Notion<\/a><\/div>$/,
       `<button class="btn soft" type="button" data-act="jobedit" data-id="${esc(j.id)}">edit</button>$&`), false, j.priority === "Top" || j.priority === "High" ? "star" : "");
-    return f.kind === "overdue" ? w.replace('<section class="win"', '<section class="win late"') : w;
+    const wi = w.replace('<section class="win"', `<section class="win" id="j-${esc(j.id)}"`);
+    return f.kind === "overdue" ? wi.replace('<section class="win"', '<section class="win late"') : wi;
   }).join("");
   const table = boxes || win("applications.txt", "butter", `<div class="soft">${all.length ? "No applications with this status." : "No applications yet. Add one in Notion."}</div>`, true);
-  return note + countsW + top + controls + table;
+  // One compact overview of every application, in the same order as the windows below.
+  const glanceRows = R.sortJobs(all, "priority").map((j) => {
+    const f = R.followUp(j, t);
+    const fu = !j.followUp ? '<span class="meta">none</span>'
+      : f.kind === "overdue" ? '<span class="tag peach">overdue</span>' : f.kind === "today" ? '<span class="tag butter">today</span>'
+      : `<span${f.kind === "soon" ? ' class="tag mint"' : ""}>${esc(lbl(j.followUp))}</span>`;
+    return `<tr><td><a class="plain golink" href="#jobs" data-act="jobjump" data-id="${esc(j.id)}">${esc(j.company)}</a><div class="meta">${esc(j.role)}</div></td>` +
+      `<td>${j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : ""}</td>` +
+      `<td>${j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${esc(j.priority.toLowerCase())}</span>` : ""}</td>` +
+      `<td>${fu}</td></tr>`;
+  }).join("");
+  const glance = all.length ? win("at_a_glance.txt", "pink",
+    `<div class="tablewrap"><table class="glance"><thead><tr><th>job</th><th>status</th><th>priority</th><th>follow-up</th></tr></thead><tbody>${glanceRows}</tbody></table></div>`, true) : "";
+  return note + glance + countsW + top + controls + table;
 }
 
 function view(): string {
@@ -871,6 +901,7 @@ function openJobForm(id: string) {
     company: j.company, role: j.role, status: j.status, applied: j.applied || "", followUp: j.followUp || "", next: j.next,
     contactName: j.contactName, contactLink: (j.contactLink || "").replace(/^mailto:/, ""), postingLink: j.postingLink || "", notes: j.notes,
     priority: j.priority, posted: j.posted, lastContacted: j.lastContacted || "", how: j.how.slice(), setup: j.setup, location: j.location,
+    contactEmail: j.contactEmail, contactPhone: j.contactPhone, salary: j.salary, requirements: j.requirements,
   } : emptyJobDraft();
   S.jobEdit = id; render();
   document.getElementById("job-company")?.focus();
@@ -883,6 +914,7 @@ async function saveJob() {
     company: d.company.trim(), role: d.role.trim(), status: d.status, applied: d.applied || null, followUp: d.followUp || null,
     next: d.next.trim(), contactName: d.contactName.trim(), contactLink: d.contactLink.trim(), postingLink: d.postingLink.trim(), notes: d.notes.trim(),
     priority: d.priority, posted: d.posted, lastContacted: d.lastContacted || null, how: d.how, setup: d.setup, location: d.location.trim(),
+    contactEmail: d.contactEmail.trim(), contactPhone: d.contactPhone.trim(), salary: d.salary.trim(), requirements: d.requirements.trim(),
   };
   if (!isLive(S.jobs)) { S.jobEdit = ""; render(); toast(SAMPLE_NOTE); return; }
   S.busy.job = true; render();
@@ -894,7 +926,7 @@ async function saveJob() {
   } catch (e) {
     S.busy.job = false; render();
     const m = writeMsg(e);
-    toast(m.includes("did not look right") ? "Something in the form did not look right, like a link or a date. Nothing was saved." : m.replace("Nothing was changed.", "Nothing was saved."), true);
+    toast(m.includes("did not look right") ? "Something in the form did not look right, like an email, phone, link, or date. Nothing was saved." : m.replace("Nothing was changed.", "Nothing was saved."), true);
   }
 }
 
@@ -954,6 +986,15 @@ app.addEventListener("click", (e) => {
   else if (a === "paid") void setPaid(id, true);
   else if (a === "unpaid") void setPaid(id, false);
   else if (a === "jobfilter") { S.jobFilter = (JOB_STATUSES as readonly string[]).includes(b.dataset.v || "") ? b.dataset.v! : "all"; render(); }
+  else if (a === "jobjump") {
+    e.preventDefault();
+    if (S.jobFilter !== "all") { S.jobFilter = "all"; render(); }
+    const el = document.getElementById("j-" + id);
+    if (el) {
+      el.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      el.classList.add("glow"); setTimeout(() => el.classList.remove("glow"), 1600);
+    }
+  }
   else if (a === "jobnew") openJobForm("new");
   else if (a === "jobedit") openJobForm(id);
   else if (a === "jobcancel") { S.jobEdit = ""; render(); }

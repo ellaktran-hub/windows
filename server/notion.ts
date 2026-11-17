@@ -249,6 +249,8 @@ const prop = (p: NotionPage, name: string) => p.properties?.[name];
 const plain = (arr: unknown): string => (Array.isArray(arr) ? arr.map((t: any) => t?.plain_text ?? "").join("") : "");
 export const text = (v: any): string => (!v ? "" : v.type === "title" ? plain(v.title) : v.type === "rich_text" ? plain(v.rich_text) : "");
 export const sel = (v: any): string => (v?.type === "select" ? v.select?.name || "" : v?.type === "status" ? v.status?.name || "" : "");
+export const emailOf = (v: any): string => (v?.type === "email" && typeof v.email === "string" ? v.email.trim() : "");
+export const phoneOf = (v: any): string => (v?.type === "phone_number" && typeof v.phone_number === "string" ? v.phone_number.trim() : "");
 export const multi = (v: any): string[] => (v?.type === "multi_select" && Array.isArray(v.multi_select) ? v.multi_select.map((o: any) => String(o?.name || "")).filter(Boolean) : []);
 export const check = (v: any): boolean => v?.type === "checkbox" && v.checkbox === true;
 export const num = (v: any): number | null => (v?.type === "number" && typeof v.number === "number" ? v.number : null);
@@ -293,6 +295,7 @@ export interface JobInput {
   company: string; role: string; status: string; applied: string | null; followUp: string | null;
   next: string; contactName: string; contactLink: string | null; postingLink: string | null; notes: string;
   priority: string; how: string[]; posted: string; lastContacted: string | null; setup: string; location: string;
+  contactEmail: string; contactPhone: string; salary: string; requirements: string;
 }
 const rtProp = (v: string) => ({ rich_text: v ? [{ text: { content: v } }] : [] });
 /** Every field is sent, so clearing one in the form clears it in Notion. */
@@ -314,6 +317,10 @@ export function jobProps(j: JobInput): Record<string, unknown> {
     "Last contacted": { date: j.lastContacted ? { start: j.lastContacted } : null },
     "Work setup": { select: j.setup ? { name: j.setup } : null },
     Location: rtProp(j.location),
+    "Contact email": { email: j.contactEmail || null },
+    "Contact phone": { phone_number: j.contactPhone || null },
+    "Salary expectations": rtProp(j.salary),
+    "Key requirements": rtProp(j.requirements),
   };
 }
 
@@ -357,6 +364,10 @@ export function normJob(p: NotionPage): Job {
     lastContacted: day(prop(p, "Last contacted")),
     setup: sel(prop(p, "Work setup")),
     location: text(prop(p, "Location")),
+    contactEmail: emailOf(prop(p, "Contact email")),
+    contactPhone: phoneOf(prop(p, "Contact phone")),
+    salary: text(prop(p, "Salary expectations")),
+    requirements: text(prop(p, "Key requirements")),
   };
 }
 
