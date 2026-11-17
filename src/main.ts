@@ -243,14 +243,16 @@ function todayView(): string {
   const cal = win("today.exe", "sky", dayButtons() + sect(calSlot(n), (c) => calBody(c, n), "Google Calendar"));
   const keep = new Set(Object.keys(S.prevStatus));
   const top = R.top3(tasks, keep), due = R.dueToday(tasks, t, keep);
-  const topW = win("top_3.txt", "butter", sect(S.tasks, () => top.length ? top.map(todo).join("") : '<div class="soft">No top 3 chosen. Tap "top 3" on up to three tasks.</div>'), false, "star");
-  const dueW = win("due_today.txt", "peach", sect(S.tasks, () => due.length ? due.map(todo).join("") : '<div class="soft">Nothing due today.</div>'));
+  // Task boxes only appear once there is something in them (loading and error states still show).
+  const loaded = !!S.tasks.data;
+  const topW = loaded && !top.length ? "" : win("top_3.txt", "butter", sect(S.tasks, () => top.map(todo).join("")), false, "star");
+  const dueW = loaded && !due.length ? "" : win("due_today.txt", "peach", sect(S.tasks, () => due.map(todo).join("")));
   const sl = win("sleep.log", "lilac", sect(S.sleep, (rows) => nightSummary(R.lastNight(rows, t), true)));
 
   // coming up, split by kind
-  const week = win("this_week.txt", "mint", sect(S.tasks, () => {
-    const w = R.weekTasks(tasks, t, keep);
-    if (!w.length) return '<div class="soft">No tasks due in the next 7 days.</div>';
+  const weekTasks = R.weekTasks(tasks, t, keep);
+  const week = loaded && !weekTasks.length ? "" : win("this_week.txt", "mint", sect(S.tasks, () => {
+    const w = weekTasks;
     // Keep Today calm: the first few, and the rest only when asked for.
     const shown = S.weekOpen ? w : w.slice(0, WEEK_LIMIT);
     const more = w.length - WEEK_LIMIT;
@@ -537,7 +539,8 @@ function projectPageView(): string {
     `<div class="big">${esc(p.name)}</div>` + (tags ? `<div class="row">${tags}</div>` : "") +
     (p.next ? `<div class="stack tight"><span class="meta">next step</span>${stepLines(p.next)}</div>` : '<div class="meta">no next step written</div>') +
     `<div><a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`, true);
-  const taskW = win("tasks.txt", "sky", sect(S.tasks, () => tasks.length ? tasks.map(todo).join("") : '<div class="soft">No open tasks for this project.</div>'), true);
+  // No tasks box until the project has a task; while loading or on error it still shows.
+  const taskW = S.tasks.data && !tasks.length ? "" : win("tasks.txt", "sky", sect(S.tasks, () => tasks.map(todo).join("")), true);
   const ns = S.notes[p.id] || slot<ProjectContentResponse>();
   let notesW: string;
   if (!ns.data) {
