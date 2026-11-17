@@ -782,7 +782,7 @@ function jobsView(): string {
     (filtered.length
       ? `<div class="tablewrap"><table class="glance"><thead><tr><th>job</th>${cols.map((c) => `<th>${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${glanceRows}</tbody></table></div>`
       : '<div class="soft">No jobs match these filters.</div>'), true) : "";
-  return note + filters + glance + countsW + top + controls + table;
+  return note + countsW + top + filters + glance + controls + table;
 }
 
 function view(): string {
