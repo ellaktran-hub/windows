@@ -157,7 +157,7 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     };
     const company = str("company", 120), role = str("role", 200), status = str("status", 40), next = str("next", 500),
       contactName = str("contactName", 200), notes = str("notes", 2000);
-    const applied = date("applied"), followUp = date("followUp"), contactLink = link("contactLink"), postingLink = link("postingLink");
+    const applied = date("applied"), followUp = date("followUp"), contactLink = link("contactLink"), postingLink = link("postingLink"), portalLink = link("portalLink");
     const priority = str("priority", 20), posted = str("posted", 20), lastContacted = date("lastContacted");
     const howRaw = b?.how == null ? [] : b.how;
     const how = Array.isArray(howRaw) && howRaw.every((x) => typeof x === "string" && (JOB_HOW as readonly string[]).includes(x)) ? [...new Set(howRaw as string[])] : null;
@@ -179,8 +179,8 @@ export function createApp<E extends object>(opts: AppOptions<E>) {
     if (role === null || next === null || contactName === null || notes === null) return "text";
     if (status === null || (status && !(JOB_STATUSES as readonly string[]).includes(status))) return "status";
     if (applied === undefined || followUp === undefined) return "date";
-    if (contactLink === undefined || postingLink === undefined) return "link";
-    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, notes, priority, how, posted, lastContacted, setup, location, contactEmail, contactPhone, requirements, postedPay, term, startDate };
+    if (contactLink === undefined || postingLink === undefined || portalLink === undefined) return "link";
+    return { company, role, status, applied, followUp, next, contactName, contactLink, postingLink, portalLink, notes, priority, how, posted, lastContacted, setup, location, contactEmail, contactPhone, requirements, postedPay, term, startDate };
   }
 
   app.post("/api/jobs", async (c) => {

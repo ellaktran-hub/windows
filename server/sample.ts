@@ -45,11 +45,11 @@ export function sampleData() {
   ];
 
   const job = (o: Partial<Job> & { id: string; company: string; status: string }): Job => ({
-    url: url(o.id), role: "", applied: null, followUp: null, next: "", contactName: "", contactLink: null, postingLink: null, notes: "",
+    url: url(o.id), role: "", applied: null, followUp: null, next: "", contactName: "", contactLink: null, postingLink: null, portalLink: null, notes: "",
     priority: "", how: [], posted: "", lastContacted: null, setup: "", location: "", contactEmail: "", contactPhone: "", requirements: "", postedPay: "", term: "", startDate: null, ...o,
   });
   const jobs: Job[] = [
-    job({ id: "j1", company: "Sample: Maple Co", role: "Marketing intern", status: "Applied", setup: "Hybrid", location: "Downtown office", contactEmail: "sam@example.com", contactPhone: "+1 (555) 010-0100", postedPay: "$20 to $24 an hour", term: "Summer", startDate: d(200), requirements: "Junior or senior standing\nComfortable with spreadsheets\nClear writing", priority: "High", how: ["Online"], posted: "Posted", lastContacted: d(-5), applied: d(-12), followUp: d(-2), next: "Send a short follow-up note", contactName: "Sam (recruiter)", contactLink: "https://www.linkedin.com/", postingLink: "https://example.com/jobs/1" }),
+    job({ id: "j1", company: "Sample: Maple Co", role: "Marketing intern", status: "Applied", setup: "Hybrid", location: "Downtown office", contactEmail: "sam@example.com", contactPhone: "+1 (555) 010-0100", postedPay: "$20 to $24 an hour", term: "Summer", startDate: d(200), requirements: "Junior or senior standing\nComfortable with spreadsheets\nClear writing", priority: "High", how: ["Online"], posted: "Posted", lastContacted: d(-5), applied: d(-12), followUp: d(-2), next: "Send a short follow-up note", contactName: "Sam (recruiter)", contactLink: "https://www.linkedin.com/", postingLink: "https://example.com/jobs/1", portalLink: "https://example.com/portal" }),
     job({ id: "j2", company: "Sample: Birch Labs", role: "Operations intern", status: "Interviewing", setup: "Remote", priority: "High", how: ["Referral"], posted: "Posted", applied: d(-20), followUp: d(3), next: "Prepare for second interview", postingLink: "https://example.com/jobs/2", notes: "Panel of three people." }),
     job({ id: "j3", company: "Sample: Cedar Group", role: "Sales intern", status: "Interested", priority: "Medium", how: ["Reached out"], posted: "Not posted", followUp: d(0), next: "Ask about openings" }),
     job({ id: "j4", company: "Sample: Elm Studio", role: "Design assistant", status: "Rejected", priority: "Low", how: ["Online"], applied: d(-40), followUp: d(-10) }),

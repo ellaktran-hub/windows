@@ -293,7 +293,7 @@ export function normBill(p: NotionPage): Bill {
 }
 export interface JobInput {
   company: string; role: string; status: string; applied: string | null; followUp: string | null;
-  next: string; contactName: string; contactLink: string | null; postingLink: string | null; notes: string;
+  next: string; contactName: string; contactLink: string | null; postingLink: string | null; portalLink: string | null; notes: string;
   priority: string; how: string[]; posted: string; lastContacted: string | null; setup: string; location: string;
   contactEmail: string; contactPhone: string; requirements: string;
   postedPay: string; term: string; startDate: string | null;
@@ -311,6 +311,7 @@ export function jobProps(j: JobInput): Record<string, unknown> {
     "Contact name": rtProp(j.contactName),
     "Contact link": { url: j.contactLink || null },
     "Job posting link": { url: j.postingLink || null },
+    "Application portal": { url: j.portalLink || null },
     Notes: rtProp(j.notes),
     Priority: { select: j.priority ? { name: j.priority } : null },
     "How I applied": { multi_select: j.how.map((name) => ({ name })) },
@@ -360,6 +361,7 @@ export function normJob(p: NotionPage): Job {
     contactName: text(prop(p, "Contact name")),
     contactLink: webLink(prop(p, "Contact link")),
     postingLink: webLink(prop(p, "Job posting link")),
+    portalLink: webLink(prop(p, "Application portal")),
     notes: text(prop(p, "Notes")),
     priority: sel(prop(p, "Priority")),
     how: multi(prop(p, "How I applied")),

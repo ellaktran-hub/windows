@@ -611,11 +611,11 @@ function cardsView(): string {
 
 // Job Applications: read from the Notion database, with forms to add and edit
 // (never delete). Every save goes to Notion and the page re-reads it.
-type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; notes: string;
+type JobDraft = { company: string; role: string; status: string; applied: string; followUp: string; next: string; contactName: string; contactLink: string; postingLink: string; portalLink: string; notes: string;
   priority: string; posted: string; lastContacted: string; how: string[]; setup: string; location: string;
   contactEmail: string; contactPhone: string; requirements: string; postedPay: string; term: string; startDate: string };
 function emptyJobDraft(): JobDraft {
-  return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", notes: "",
+  return { company: "", role: "", status: "Interested", applied: "", followUp: "", next: "", contactName: "", contactLink: "", postingLink: "", portalLink: "", notes: "",
     priority: "Medium", posted: "", lastContacted: "", how: [], setup: "", location: "", contactEmail: "", contactPhone: "", requirements: "", postedPay: "", term: "", startDate: "" };
 }
 function jobForm(title: string): string {
@@ -636,6 +636,7 @@ function jobForm(title: string): string {
     '<div class="fields">' + field("contactEmail", "Email", "email", ' inputmode="email" maxlength="200"') + field("contactPhone", "Phone", "tel", ' inputmode="tel" maxlength="40"') + "</div>" +
     field("contactLink", "Profile link", "text", ' inputmode="url" placeholder="linkedin.com/in/..."') + "</fieldset>" +
     field("postingLink", "Job posting link", "text", ' inputmode="url" placeholder="company.com/careers/..."') +
+    field("portalLink", "Application portal link", "text", ' inputmode="url" placeholder="where you check your status"') +
     '<div class="fields">' + field("term", "Term", "text", ' maxlength="80" placeholder="like Summer 2027"') + field("startDate", "Start date", "date") + "</div>" +
     field("postedPay", "Posted pay", "text", ' maxlength="300" placeholder="what the posting says"') +
     `<label for="job-requirements">Key requirements (one per line)<textarea id="job-requirements" data-job="requirements" rows="3" maxlength="2000">${esc(d.requirements)}</textarea></label>` +
@@ -758,6 +759,7 @@ function jobsView(): string {
       section("extra notes", j.notes ? `<div>${esc(j.notes)}</div>` : "") +
       `<div class="row">` +
       (j.postingLink ? `<a class="btn go" href="${esc(j.postingLink)}" target="_blank" rel="noopener noreferrer">job posting</a>` : "") +
+      (j.portalLink ? `<a class="btn go" href="${esc(j.portalLink)}" target="_blank" rel="noopener noreferrer">portal</a>` : "") +
       `<a class="link" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">open in Notion</a></div>`;
     if (S.jobEdit === j.id) return jobForm("edit_" + fileName(j.company + " " + j.role));
     const w = win(fileName(j.company + " " + j.role), color, body.replace(/<a class="link" href="[^"]*" target="_blank" rel="noopener noreferrer">open in Notion<\/a><\/div>$/,
@@ -950,7 +952,7 @@ function openJobForm(id: string) {
   if (id !== "new" && !j) return;
   S.jobDraft = j ? {
     company: j.company, role: j.role, status: j.status, applied: j.applied || "", followUp: j.followUp || "", next: j.next,
-    contactName: j.contactName, contactLink: (j.contactLink || "").replace(/^mailto:/, ""), postingLink: j.postingLink || "", notes: j.notes,
+    contactName: j.contactName, contactLink: (j.contactLink || "").replace(/^mailto:/, ""), postingLink: j.postingLink || "", portalLink: j.portalLink || "", notes: j.notes,
     priority: j.priority, posted: j.posted, lastContacted: j.lastContacted || "", how: j.how.slice(), setup: j.setup, location: j.location,
     contactEmail: j.contactEmail, contactPhone: j.contactPhone, requirements: j.requirements,
     postedPay: j.postedPay, term: j.term, startDate: j.startDate || "",
@@ -964,7 +966,7 @@ async function saveJob() {
   if (!d.company.trim()) { toast("Add the company name first.", true); return; }
   const payload = {
     company: d.company.trim(), role: d.role.trim(), status: d.status, applied: d.applied || null, followUp: d.followUp || null,
-    next: d.next.trim(), contactName: d.contactName.trim(), contactLink: d.contactLink.trim(), postingLink: d.postingLink.trim(), notes: d.notes.trim(),
+    next: d.next.trim(), contactName: d.contactName.trim(), contactLink: d.contactLink.trim(), postingLink: d.postingLink.trim(), portalLink: d.portalLink.trim(), notes: d.notes.trim(),
     priority: d.priority, posted: d.posted, lastContacted: d.lastContacted || null, how: d.how, setup: d.setup, location: d.location.trim(),
     contactEmail: d.contactEmail.trim(), contactPhone: d.contactPhone.trim(), requirements: d.requirements.trim(),
     postedPay: d.postedPay.trim(), term: d.term.trim(), startDate: d.startDate || null,

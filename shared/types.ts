@@ -62,6 +62,7 @@ export interface Job {
   contactName: string;
   contactLink: string | null; // http(s) only
   postingLink: string | null; // http(s) only
+  portalLink: string | null; // the company's application portal, http(s) only
   notes: string;
   priority: string; // Top, High, Medium, Low
   how: string[]; // How I applied
