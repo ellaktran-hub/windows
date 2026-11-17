@@ -655,7 +655,8 @@ function followHtml(j: Job, t: string): string {
   if (f.kind === "overdue") return `<span class="tag peach">overdue</span><span class="meta">${date} · ${esc(rel(j.followUp!, t))}</span>`;
   if (f.kind === "today") return `<span class="tag butter">today</span>`;
   if (f.kind === "soon") return `<span class="tag mint">${esc(rel(j.followUp!, t))}</span><span class="meta">${date}</span>`;
-  return `<span class="meta">${date}</span>`;
+  if (f.kind === "later") return `<span class="tag lilac">${esc(rel(j.followUp!, t))}</span><span class="meta">${date}</span>`;
+  return `<span class="meta">${date}</span>`; // closed applications stay plain
 }
 function jobsView(): string {
   const t = todayStr();
@@ -722,7 +723,7 @@ function jobsView(): string {
     const f = R.followUp(j, t);
     const fu = !j.followUp ? ""
       : f.kind === "overdue" ? '<span class="tag peach">overdue</span>' : f.kind === "today" ? '<span class="tag butter">today</span>'
-      : `<span${f.kind === "soon" ? ' class="tag mint"' : ""}>${esc(lbl(j.followUp))}</span>`;
+      : `<span${f.kind === "soon" ? ' class="tag mint"' : f.kind === "later" ? ' class="tag lilac"' : ""}>${esc(lbl(j.followUp))}</span>`;
     return `<tr><td><a class="plain golink" href="#jobs" data-act="jobjump" data-id="${esc(j.id)}">${esc(j.company)}</a><div class="meta">${esc(j.role)}</div></td>` +
       `<td>${j.status ? `<span class="tag ${JOB_COLOR[j.status] ?? ""}">${esc(j.status.toLowerCase())}</span>` : ""}</td>` +
       `<td>${j.priority ? `<span class="tag prio-${esc(j.priority.toLowerCase())}">${esc(j.priority.toLowerCase())}</span>` : ""}</td>` +
